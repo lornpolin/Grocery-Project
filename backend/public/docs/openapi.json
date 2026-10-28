@@ -1,0 +1,371 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Grocery App API",
+    "version": "1.0.0",
+    "description": "Laravel API for the Grocery Flutter app. Login with `test@example.com` / `password`, copy the `token`, click **Authorize** and paste it."
+  },
+  "servers": [{ "url": "/api", "description": "This server" }],
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": { "type": "http", "scheme": "bearer" }
+    },
+    "schemas": {
+      "User": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string", "example": "1" },
+          "name": { "type": "string", "example": "Test User" },
+          "email": { "type": "string", "example": "test@example.com" }
+        }
+      },
+      "AuthResponse": {
+        "type": "object",
+        "properties": {
+          "token": { "type": "string", "example": "1|abc123..." },
+          "expiresAt": { "type": "string", "format": "date-time", "description": "Token expiration timestamp (30 days)" },
+          "user": { "$ref": "#/components/schemas/User" }
+        }
+      },
+      "Category": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string", "example": "1" },
+          "name": { "type": "string", "example": "Fresh Fruits" },
+          "iconAsset": { "type": "string", "nullable": true, "example": "assets/icons/fruits.png" }
+        }
+      },
+      "Product": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string", "example": "1" },
+          "name": { "type": "string", "example": "Organic Bananas" },
+          "description": { "type": "string" },
+          "imageUrl": { "type": "string", "description": "Main image (first of images)" },
+          "images": { "type": "array", "items": { "type": "string" }, "description": "All image URLs, main image first" },
+          "price": { "type": "number", "example": 4.99 },
+          "originalPrice": { "type": "number", "nullable": true },
+          "unit": { "type": "string", "example": "1 kg" },
+          "categoryId": { "type": "string", "example": "1" },
+          "stockQuantity": { "type": "integer", "example": 100 },
+          "isFavorite": { "type": "boolean" }
+        }
+      },
+      "CartItem": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "product": { "$ref": "#/components/schemas/Product" },
+          "quantity": { "type": "integer", "example": 2 }
+        }
+      },
+      "Order": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "subtotal": { "type": "number" },
+          "deliveryFee": { "type": "number" },
+          "total": { "type": "number" },
+          "status": { "type": "string", "example": "pending" },
+          "address": { "type": "string", "nullable": true },
+          "createdAt": { "type": "string", "format": "date-time" },
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "productId": { "type": "string" },
+                "name": { "type": "string" },
+                "price": { "type": "number" },
+                "quantity": { "type": "integer" }
+              }
+            }
+          }
+        }
+      },
+      "Address": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string", "example": "1" },
+          "label": { "type": "string", "example": "Home" },
+          "recipientName": { "type": "string", "nullable": true, "example": "Test User" },
+          "phone": { "type": "string", "nullable": true, "example": "012345678" },
+          "address": { "type": "string", "example": "#123 Street 271, Phnom Penh" },
+          "city": { "type": "string", "nullable": true, "example": "Phnom Penh" },
+          "isDefault": { "type": "boolean", "example": true }
+        }
+      }
+    }
+  },
+  "paths": {
+    "/auth/register": {
+      "post": {
+        "tags": ["Auth"],
+        "summary": "Register a new user",
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": {
+            "type": "object",
+            "required": ["name", "email", "password"],
+            "properties": {
+              "name": { "type": "string", "example": "Sok Dara" },
+              "email": { "type": "string", "example": "dara@example.com" },
+              "password": { "type": "string", "minLength": 6, "example": "secret123" }
+            }
+          } } }
+        },
+        "responses": {
+          "201": { "description": "Created", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/AuthResponse" } } } },
+          "422": { "description": "Validation error" }
+        }
+      }
+    },
+    "/auth/login": {
+      "post": {
+        "tags": ["Auth"],
+        "summary": "Login and get a token",
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": {
+            "type": "object",
+            "required": ["email", "password"],
+            "properties": {
+              "email": { "type": "string", "example": "test@example.com" },
+              "password": { "type": "string", "example": "password" }
+            }
+          } } }
+        },
+        "responses": {
+          "200": { "description": "OK", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/AuthResponse" } } } },
+          "422": { "description": "Invalid credentials" }
+        }
+      }
+    },
+    "/auth/refresh": {
+      "post": {
+        "tags": ["Auth"],
+        "summary": "Reset/refresh token (valid or expired) and issue a new 30-day token",
+        "security": [{ "bearerAuth": [] }],
+        "responses": {
+          "200": { "description": "OK", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/AuthResponse" } } } },
+          "401": { "description": "Unauthenticated" }
+        }
+      }
+    },
+    "/auth/logout": {
+      "post": {
+        "tags": ["Auth"],
+        "summary": "Revoke current token",
+        "security": [{ "bearerAuth": [] }],
+        "responses": { "200": { "description": "Logged out" }, "401": { "description": "Unauthenticated" } }
+      }
+    },
+    "/auth/me": {
+      "get": {
+        "tags": ["Auth"],
+        "summary": "Current user",
+        "security": [{ "bearerAuth": [] }],
+        "responses": { "200": { "description": "OK", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/User" } } } } }
+      }
+    },
+    "/categories": {
+      "get": {
+        "tags": ["Catalog"],
+        "summary": "List categories",
+        "responses": { "200": { "description": "OK", "content": { "application/json": { "schema": { "type": "array", "items": { "$ref": "#/components/schemas/Category" } } } } } }
+      }
+    },
+    "/products": {
+      "get": {
+        "tags": ["Catalog"],
+        "summary": "List products",
+        "description": "Send the bearer token to get the correct `isFavorite` flags.",
+        "parameters": [
+          { "name": "category", "in": "query", "schema": { "type": "integer" }, "description": "Category id" },
+          { "name": "q", "in": "query", "schema": { "type": "string" }, "description": "Search by name" }
+        ],
+        "responses": { "200": { "description": "OK", "content": { "application/json": { "schema": { "type": "array", "items": { "$ref": "#/components/schemas/Product" } } } } } }
+      }
+    },
+    "/products/{id}": {
+      "get": {
+        "tags": ["Catalog"],
+        "summary": "Get one product",
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }],
+        "responses": {
+          "200": { "description": "OK", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Product" } } } },
+          "404": { "description": "Not found" }
+        }
+      }
+    },
+    "/cart": {
+      "get": {
+        "tags": ["Cart"],
+        "summary": "Get my cart",
+        "security": [{ "bearerAuth": [] }],
+        "responses": { "200": { "description": "OK", "content": { "application/json": { "schema": { "type": "array", "items": { "$ref": "#/components/schemas/CartItem" } } } } } }
+      },
+      "post": {
+        "tags": ["Cart"],
+        "summary": "Add product to cart (adds to existing quantity)",
+        "security": [{ "bearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": {
+            "type": "object",
+            "required": ["product_id"],
+            "properties": {
+              "product_id": { "type": "integer", "example": 1 },
+              "quantity": { "type": "integer", "minimum": 1, "example": 2 }
+            }
+          } } }
+        },
+        "responses": { "201": { "description": "Updated cart", "content": { "application/json": { "schema": { "type": "array", "items": { "$ref": "#/components/schemas/CartItem" } } } } } }
+      },
+      "delete": {
+        "tags": ["Cart"],
+        "summary": "Clear cart",
+        "security": [{ "bearerAuth": [] }],
+        "responses": { "200": { "description": "Empty cart" } }
+      }
+    },
+    "/cart/{id}": {
+      "put": {
+        "tags": ["Cart"],
+        "summary": "Set quantity (0 removes the line)",
+        "description": "`id` is the product id.",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }],
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": {
+            "type": "object",
+            "required": ["quantity"],
+            "properties": { "quantity": { "type": "integer", "minimum": 0, "example": 3 } }
+          } } }
+        },
+        "responses": { "200": { "description": "Updated cart" } }
+      },
+      "delete": {
+        "tags": ["Cart"],
+        "summary": "Remove product from cart",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }],
+        "responses": { "200": { "description": "Updated cart" } }
+      }
+    },
+    "/favorites": {
+      "get": {
+        "tags": ["Favorites"],
+        "summary": "List favorite products",
+        "security": [{ "bearerAuth": [] }],
+        "responses": { "200": { "description": "OK", "content": { "application/json": { "schema": { "type": "array", "items": { "$ref": "#/components/schemas/Product" } } } } } }
+      }
+    },
+    "/favorites/{id}/toggle": {
+      "post": {
+        "tags": ["Favorites"],
+        "summary": "Toggle favorite for a product",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }],
+        "responses": { "200": { "description": "New state", "content": { "application/json": { "schema": { "type": "object", "properties": { "isFavorite": { "type": "boolean" } } } } } } }
+      }
+    },
+    "/orders": {
+      "get": {
+        "tags": ["Orders"],
+        "summary": "List my orders",
+        "security": [{ "bearerAuth": [] }],
+        "responses": { "200": { "description": "OK", "content": { "application/json": { "schema": { "type": "array", "items": { "$ref": "#/components/schemas/Order" } } } } } }
+      },
+      "post": {
+        "tags": ["Orders"],
+        "summary": "Place an order from the cart",
+        "security": [{ "bearerAuth": [] }],
+        "requestBody": {
+          "content": { "application/json": { "schema": {
+            "type": "object",
+            "properties": { "address": { "type": "string", "example": "Phnom Penh" } }
+          } } }
+        },
+        "responses": {
+          "201": { "description": "Created", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Order" } } } },
+          "422": { "description": "Cart is empty" }
+        }
+      }
+    },
+    "/orders/{id}": {
+      "get": {
+        "tags": ["Orders"],
+        "summary": "Get one order",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }],
+        "responses": {
+          "200": { "description": "OK", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Order" } } } },
+          "404": { "description": "Not found" }
+        }
+      }
+    },
+    "/addresses": {
+      "get": {
+        "tags": ["Addresses"],
+        "summary": "List my saved addresses",
+        "security": [{ "bearerAuth": [] }],
+        "responses": { "200": { "description": "OK", "content": { "application/json": { "schema": { "type": "array", "items": { "$ref": "#/components/schemas/Address" } } } } } }
+      },
+      "post": {
+        "tags": ["Addresses"],
+        "summary": "Create a new address",
+        "security": [{ "bearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": {
+            "type": "object",
+            "required": ["address"],
+            "properties": {
+              "label": { "type": "string", "example": "Home" },
+              "recipient_name": { "type": "string", "example": "Test User" },
+              "phone": { "type": "string", "example": "012345678" },
+              "address": { "type": "string", "example": "#123 Street 271, Phnom Penh" },
+              "city": { "type": "string", "example": "Phnom Penh" },
+              "is_default": { "type": "boolean", "example": true }
+            }
+          } } }
+        },
+        "responses": {
+          "201": { "description": "Created", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Address" } } } }
+        }
+      }
+    },
+    "/addresses/{id}": {
+      "put": {
+        "tags": ["Addresses"],
+        "summary": "Update an address",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }],
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": {
+            "type": "object",
+            "properties": {
+              "label": { "type": "string" },
+              "recipient_name": { "type": "string" },
+              "phone": { "type": "string" },
+              "address": { "type": "string" },
+              "city": { "type": "string" },
+              "is_default": { "type": "boolean" }
+            }
+          } } }
+        },
+        "responses": { "200": { "description": "OK", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Address" } } } } }
+      },
+      "delete": {
+        "tags": ["Addresses"],
+        "summary": "Delete an address",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } }],
+        "responses": { "200": { "description": "OK", "content": { "application/json": { "schema": { "type": "array", "items": { "$ref": "#/components/schemas/Address" } } } } } }
+      }
+    }
+  }
+}
