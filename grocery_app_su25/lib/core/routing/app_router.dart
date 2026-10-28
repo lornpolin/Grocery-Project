@@ -12,6 +12,7 @@ import '../../features/cart/screens/cart_screen.dart';
 import '../../features/checkout/screens/checkout_screen.dart';
 import '../../features/profile/screens/profile_screen.dart';
 import '../../features/favorites/screens/favorites_screen.dart';
+import '../../features/addresses/screens/addresses_screen.dart';
 import '../../features/product_details/screens/product_details_screen.dart';
 import '../../models/order.dart';
 import '../../models/product.dart';
@@ -69,6 +70,11 @@ final GoRouter appRouter = GoRouter(
       path: '/favorites',
       parentNavigatorKey: _rootNavigatorKey,
       builder: (context, state) => const FavoritesScreen(),
+    ),
+    GoRoute(
+      path: '/addresses',
+      parentNavigatorKey: _rootNavigatorKey,
+      builder: (context, state) => const AddressesScreen(),
     ),
     GoRoute(
       path: '/products',

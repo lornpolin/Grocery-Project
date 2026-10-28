@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/constants/app_colors.dart';
+import '../../../models/address.dart';
 import '../../../providers/app_providers.dart';
+import '../../addresses/screens/addresses_screen.dart';
 import '../../cart/widgets/checkout_widgets.dart';
 
 enum PaymentMethod {
@@ -24,7 +26,6 @@ class CheckoutScreen extends ConsumerStatefulWidget {
 }
 
 class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
-  String _address = '83 Street 7B, Phnom Penh';
   PaymentMethod _payment = PaymentMethod.cash;
   final _instructions = TextEditingController();
 
@@ -34,33 +35,127 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     super.dispose();
   }
 
-  Future<void> _editAddress() async {
-    final controller = TextEditingController(text: _address);
-    final result = await showDialog<String>(
+  Future<void> _selectOrEditAddress(
+    List<SavedAddress> addresses,
+    SavedAddress? current,
+  ) async {
+    await showModalBottomSheet<void>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: Colors.white,
-        surfaceTintColor: Colors.transparent,
-        title: const Text('Delivery address',
-            style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
-        content: TextField(
-          controller: controller,
-          autofocus: true,
-          maxLines: 2,
-          minLines: 1,
-          decoration: const InputDecoration(hintText: 'Street, city'),
+      backgroundColor: Colors.white,
+      showDragHandle: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  const Text(
+                    'Delivery Address',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w700,
+                      color: CheckoutColors.title,
+                    ),
+                  ),
+                  const Spacer(),
+                  TextButton.icon(
+                    onPressed: () {
+                      Navigator.pop(ctx);
+                      context.push('/addresses');
+                    },
+                    icon: const Icon(Icons.add_rounded, size: 18),
+                    label: const Text('Manage'),
+                  ),
+                ],
+              ),
+              if (addresses.isEmpty)
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 12),
+                  child: Text(
+                    'No saved address yet. Add your delivery address to continue.',
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: CheckoutColors.muted,
+                    ),
+                  ),
+                )
+              else
+                ConstrainedBox(
+                  constraints: const BoxConstraints(maxHeight: 280),
+                  child: ListView.separated(
+                    shrinkWrap: true,
+                    itemCount: addresses.length,
+                    separatorBuilder: (_, _) =>
+                        const Divider(height: 1, color: CheckoutColors.line),
+                    itemBuilder: (_, index) {
+                      final a = addresses[index];
+                      final isSelected = current?.id == a.id;
+                      return ListTile(
+                        contentPadding:
+                            const EdgeInsets.symmetric(horizontal: 4),
+                        leading: Icon(
+                          iconForAddressLabel(a.label),
+                          color: isSelected
+                              ? AppColors.primary
+                              : CheckoutColors.muted,
+                        ),
+                        title: Text(
+                          a.label,
+                          style: const TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w700,
+                            color: CheckoutColors.title,
+                          ),
+                        ),
+                        subtitle: Text(
+                          a.fullAddress,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontSize: 13,
+                            color: CheckoutColors.muted,
+                          ),
+                        ),
+                        trailing: isSelected
+                            ? const Icon(
+                                Icons.check_circle_rounded,
+                                color: AppColors.primary,
+                              )
+                            : const Icon(
+                                Icons.circle_outlined,
+                                color: CheckoutColors.line,
+                              ),
+                        onTap: () {
+                          ref
+                              .read(addressesProvider.notifier)
+                              .setDefault(a.id);
+                          Navigator.pop(ctx);
+                        },
+                      );
+                    },
+                  ),
+                ),
+              const SizedBox(height: 12),
+              PillButton(
+                label: addresses.isEmpty
+                    ? '+ Add Delivery Address'
+                    : 'Manage Saved Addresses',
+                onPressed: () {
+                  Navigator.pop(ctx);
+                  context.push('/addresses');
+                },
+              ),
+            ],
+          ),
         ),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
-          TextButton(
-              onPressed: () => Navigator.pop(ctx, controller.text.trim()),
-              child: const Text('Save')),
-        ],
       ),
     );
-    controller.dispose();
-    if (result != null && result.isNotEmpty) setState(() => _address = result);
   }
 
   Future<void> _changePayment() async {
@@ -110,12 +205,30 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     if (result != null) setState(() => _payment = result);
   }
 
-  Future<void> _placeOrder(double subtotal) async {
+  Future<void> _placeOrder(
+    double subtotal,
+    SavedAddress? selectedAddress,
+  ) async {
+    if (selectedAddress == null) {
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          const SnackBar(
+            content: Text('Please add your delivery address first'),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      context.push('/addresses');
+      return;
+    }
+
     final items = ref.read(cartProvider);
+    final resolvedAddress = selectedAddress.fullAddress;
     final order = await ref.read(ordersProvider.notifier).placeOrder(
           items: items,
           subtotal: subtotal,
-          address: _address,
+          address: resolvedAddress,
+          addressId: selectedAddress.id,
           instructions: _instructions.text.trim(),
           paymentMethod: _payment.label,
         );
@@ -151,7 +264,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                       color: CheckoutColors.title)),
               const SizedBox(height: 8),
               Text(
-                'Order #${order.id} · ${money(order.total)}\nWe\'ll deliver it to $_address.',
+                'Order #${order.id} · ${money(order.total)}\nWe\'ll deliver it to $resolvedAddress.',
                 textAlign: TextAlign.center,
                 style: const TextStyle(
                     fontSize: 14, height: 1.5, color: CheckoutColors.muted),
@@ -173,6 +286,8 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
   Widget build(BuildContext context) {
     final subtotal = ref.watch(cartTotalProvider);
     final hasItems = ref.watch(cartProvider).isNotEmpty;
+    final addresses = ref.watch(addressesProvider);
+    final selectedAddress = ref.watch(selectedAddressProvider);
     final total = subtotal + kDeliveryFee + kServiceFee;
 
     return Scaffold(
@@ -187,7 +302,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                _addressCard(),
+                _addressCard(addresses, selectedAddress),
                 const SizedBox(height: 22),
                 Row(
                   children: [
@@ -267,7 +382,9 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                 const SizedBox(height: 14),
                 PillButton(
                   label: 'Place Order',
-                  onPressed: hasItems ? () => _placeOrder(subtotal) : null,
+                  onPressed: hasItems
+                      ? () => _placeOrder(subtotal, selectedAddress)
+                      : null,
                 ),
               ],
             ),
@@ -277,7 +394,16 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     );
   }
 
-  Widget _addressCard() {
+  Widget _addressCard(
+    List<SavedAddress> addresses,
+    SavedAddress? selectedAddress,
+  ) {
+    final hasAddress = selectedAddress != null;
+    final addressText = hasAddress
+        ? selectedAddress.fullAddress
+        : '+ Add your delivery address';
+    final label = selectedAddress?.label;
+
     return CheckoutCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -292,9 +418,30 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                       fontSize: 18,
                       fontWeight: FontWeight.w700,
                       color: CheckoutColors.title)),
+              if (label != null && label.isNotEmpty) ...[
+                const SizedBox(width: 8),
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: AppColors.primaryLight,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Text(
+                    label,
+                    style: const TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.primaryDark,
+                    ),
+                  ),
+                ),
+              ],
               const Spacer(),
               InkResponse(
-                onTap: _editAddress,
+                onTap: () => hasAddress
+                    ? _selectOrEditAddress(addresses, selectedAddress)
+                    : context.push('/addresses'),
                 radius: 20,
                 child: const Icon(Icons.edit_square,
                     size: 22, color: CheckoutColors.title),
@@ -312,8 +459,33 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
             ),
           ),
           const SizedBox(height: 14),
-          Text(_address,
-              style: const TextStyle(fontSize: 15, color: CheckoutColors.title)),
+          InkWell(
+            borderRadius: BorderRadius.circular(8),
+            onTap: () => hasAddress
+                ? _selectOrEditAddress(addresses, selectedAddress)
+                : context.push('/addresses'),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    addressText,
+                    style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w700,
+                      color: hasAddress
+                          ? CheckoutColors.title
+                          : AppColors.primary,
+                    ),
+                  ),
+                ),
+                Icon(
+                  Icons.chevron_right_rounded,
+                  size: 20,
+                  color: hasAddress ? CheckoutColors.muted : AppColors.primary,
+                ),
+              ],
+            ),
+          ),
           const SizedBox(height: 14),
           TextField(
             controller: _instructions,

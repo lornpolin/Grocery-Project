@@ -45,6 +45,8 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
         email: _email.text,
         password: _password.text,
       );
+      await ref.read(addressesProvider.notifier).clear();
+      ref.read(shouldPromptAddAddressProvider.notifier).state = true;
       ref.read(categoriesProvider.notifier).refresh();
       ref.read(productsProvider.notifier).refresh();
       ref.read(cartProvider.notifier).refresh();
@@ -59,6 +61,8 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
           name: _name.text.trim(),
           email: _email.text.trim(),
         );
+        await ref.read(addressesProvider.notifier).clear();
+        ref.read(shouldPromptAddAddressProvider.notifier).state = true;
         if (!mounted) return;
         context.go('/home');
         return;

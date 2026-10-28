@@ -2,6 +2,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart'
     show TargetPlatform, defaultTargetPlatform, kIsWeb;
 import '../core/auth/auth_state.dart';
+import '../models/address.dart';
 import '../models/cart_item.dart';
 import '../models/category.dart';
 import '../models/order.dart';
@@ -371,14 +372,20 @@ class ApiClient {
 
   Future<Order> createOrder({
     required String address,
+    String? addressId,
     String instructions = '',
     String paymentMethod = 'Cash',
     List<Product> catalog = const [],
   }) async {
     try {
+      final parsedAddressId =
+          addressId != null ? int.tryParse(addressId) : null;
       final res = await _dio.post(
         '/orders',
-        data: {'address': address},
+        data: {
+          'address': address,
+          'address_id': ?parsedAddressId,
+        },
       );
       return Order.fromJson(
         res.data as Map<String, dynamic>,
@@ -386,6 +393,88 @@ class ApiClient {
         defaultInstructions: instructions,
         defaultPaymentMethod: paymentMethod,
       );
+    } on DioException catch (e) {
+      throw _mapDioError(e);
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Addresses Endpoints
+  // ---------------------------------------------------------------------------
+
+  Future<List<SavedAddress>> fetchAddresses() async {
+    try {
+      final res = await _dio.get('/addresses');
+      final list = res.data as List<dynamic>;
+      return list
+          .map((e) => SavedAddress.fromJson(e as Map<String, dynamic>))
+          .toList();
+    } on DioException catch (e) {
+      throw _mapDioError(e);
+    }
+  }
+
+  Future<SavedAddress> createAddress({
+    required String label,
+    String? recipientName,
+    String? phone,
+    required String address,
+    String? city,
+    bool isDefault = false,
+  }) async {
+    try {
+      final res = await _dio.post(
+        '/addresses',
+        data: {
+          'label': label.trim().isEmpty ? 'Home' : label.trim(),
+          if (recipientName != null && recipientName.trim().isNotEmpty)
+            'recipient_name': recipientName.trim(),
+          if (phone != null && phone.trim().isNotEmpty) 'phone': phone.trim(),
+          'address': address.trim(),
+          if (city != null && city.trim().isNotEmpty) 'city': city.trim(),
+          'is_default': isDefault,
+        },
+      );
+      return SavedAddress.fromJson(res.data as Map<String, dynamic>);
+    } on DioException catch (e) {
+      throw _mapDioError(e);
+    }
+  }
+
+  Future<SavedAddress> updateAddress(
+    String id, {
+    String? label,
+    String? recipientName,
+    String? phone,
+    String? address,
+    String? city,
+    bool? isDefault,
+  }) async {
+    try {
+      final res = await _dio.put(
+        '/addresses/$id',
+        data: {
+          if (label != null) 'label': label.trim(),
+          if (recipientName != null) 'recipient_name': recipientName.trim(),
+          if (phone != null) 'phone': phone.trim(),
+          if (address != null) 'address': address.trim(),
+          if (city != null) 'city': city.trim(),
+          'is_default': ?isDefault,
+        },
+      );
+      return SavedAddress.fromJson(res.data as Map<String, dynamic>);
+    } on DioException catch (e) {
+      throw _mapDioError(e);
+    }
+  }
+
+  Future<List<SavedAddress>> deleteAddress(String id) async {
+    try {
+      final res = await _dio.delete('/addresses/$id');
+      final list = res.data as List<dynamic>;
+      return list
+          .map((e) => SavedAddress.fromJson(e as Map<String, dynamic>))
+          .toList();
     } on DioException catch (e) {
       throw _mapDioError(e);
     }

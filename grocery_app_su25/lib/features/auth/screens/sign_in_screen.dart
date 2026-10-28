@@ -36,11 +36,13 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
         email: _email.text,
         password: _password.text,
       );
+      await ref.read(addressesProvider.notifier).clear();
       ref.read(categoriesProvider.notifier).refresh();
       ref.read(productsProvider.notifier).refresh();
       ref.read(cartProvider.notifier).refresh();
       ref.read(favoriteProvider.notifier).refresh();
       ref.read(ordersProvider.notifier).refresh();
+      ref.read(addressesProvider.notifier).refresh();
       if (!mounted) return;
       context.go('/home');
     } on ApiException catch (e) {

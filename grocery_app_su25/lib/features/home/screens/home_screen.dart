@@ -10,6 +10,8 @@ import '../../../core/widgets/skeleton_loaders.dart';
 import '../../../models/category.dart';
 import '../../../models/product.dart';
 import '../../../providers/app_providers.dart';
+import '../../addresses/screens/addresses_screen.dart';
+import '../../cart/widgets/checkout_widgets.dart';
 import '../widgets/product_tile.dart';
 
 const _homeAccent = AppColors.primary;
@@ -27,11 +29,105 @@ class HomeScreen extends ConsumerStatefulWidget {
 class _HomeScreenState extends ConsumerState<HomeScreen> {
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
+  bool _popupShown = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      if (ref.read(shouldPromptAddAddressProvider)) {
+        _triggerAddressPopup();
+      }
+    });
+  }
 
   @override
   void dispose() {
     _searchController.dispose();
     super.dispose();
+  }
+
+  Future<void> _triggerAddressPopup() async {
+    if (_popupShown || !mounted) return;
+    if (ref.read(addressesProvider).isNotEmpty) {
+      ref.read(shouldPromptAddAddressProvider.notifier).state = false;
+      return;
+    }
+    _popupShown = true;
+    ref.read(shouldPromptAddAddressProvider.notifier).state = false;
+
+    final shouldOpenForm = await showDialog<bool>(
+      context: context,
+      barrierDismissible: true,
+      builder: (ctx) => Dialog(
+        backgroundColor: Colors.white,
+        surfaceTintColor: Colors.transparent,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(24, 28, 24, 20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 72,
+                height: 72,
+                decoration: const BoxDecoration(
+                  color: Color(0xFFEAF3FC),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.add_location_alt_rounded,
+                  size: 36,
+                  color: _homeAccent,
+                ),
+              ),
+              const SizedBox(height: 18),
+              const Text(
+                'Add Delivery Address',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.w800,
+                  color: _homeTitle,
+                ),
+              ),
+              const SizedBox(height: 8),
+              const Text(
+                'You don\'t have a delivery address yet. Add your address now so we can deliver your groceries to your doorstep.',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 14,
+                  height: 1.5,
+                  color: _homeMuted,
+                ),
+              ),
+              const SizedBox(height: 22),
+              PillButton(
+                label: 'Add Address Now',
+                onPressed: () => Navigator.pop(ctx, true),
+              ),
+              const SizedBox(height: 8),
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: const Text(
+                  'Maybe Later',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: _homeMuted,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    if (shouldOpenForm == true && mounted) {
+      await showAddressFormSheet(context);
+    }
   }
 
   List<Product> _filterProducts(List<Product> products) {
@@ -45,6 +141,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
+    ref.listen<bool>(shouldPromptAddAddressProvider, (prev, next) {
+      if (next) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          _triggerAddressPopup();
+        });
+      }
+    });
+
     final products = ref.watch(productsProvider);
     final isSearching = _searchQuery.trim().isNotEmpty;
     final filteredProducts = _filterProducts(products);
@@ -58,6 +162,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             await Future.wait([
               ref.read(categoriesProvider.notifier).refresh(),
               ref.read(productsProvider.notifier).refresh(),
+              ref.read(addressesProvider.notifier).refresh(),
             ]);
           },
           child: CustomScrollView(
@@ -243,47 +348,80 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   }
 }
 
-class _HomeHeader extends StatelessWidget {
+class _HomeHeader extends ConsumerWidget {
   const _HomeHeader();
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final selectedAddress = ref.watch(selectedAddressProvider);
+    final locationLabel = selectedAddress?.headerLocation ?? 'Phnom Penh';
+
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
       child: Row(
         children: [
-          Container(
-            width: 40,
-            height: 40,
-            decoration: BoxDecoration(
-              color: _homeAccent.withValues(alpha: 0.15),
-              shape: BoxShape.circle,
-            ),
-            child: const Icon(Icons.location_on, color: _homeAccent, size: 22),
-          ),
-          const SizedBox(width: 10),
-          const Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'DELIVERY TO',
-                  style: TextStyle(
-                    fontSize: 10,
-                    letterSpacing: 1,
-                    fontWeight: FontWeight.w600,
-                    color: _homeMuted,
+          Expanded(
+            child: InkWell(
+              borderRadius: BorderRadius.circular(12),
+              onTap: () => context.push('/addresses'),
+              child: Row(
+                children: [
+                  Container(
+                    width: 40,
+                    height: 40,
+                    decoration: BoxDecoration(
+                      color: _homeAccent.withValues(alpha: 0.15),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(
+                      Icons.location_on,
+                      color: _homeAccent,
+                      size: 22,
+                    ),
                   ),
-                ),
-                Text(
-                  'Phnom Penh',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w800,
-                    color: _homeTitle,
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'DELIVERY TO',
+                          style: TextStyle(
+                            fontSize: 10,
+                            letterSpacing: 1,
+                            fontWeight: FontWeight.w600,
+                            color: _homeMuted,
+                          ),
+                        ),
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            ConstrainedBox(
+                              constraints: const BoxConstraints(maxWidth: 140),
+                              child: Text(
+                                locationLabel,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w800,
+                                  color: _homeTitle,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 4),
+                            const Icon(
+                              Icons.keyboard_arrow_down_rounded,
+                              size: 18,
+                              color: _homeTitle,
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
           IconButton(

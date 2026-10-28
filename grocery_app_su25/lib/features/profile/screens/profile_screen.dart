@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/auth/auth_state.dart';
 import '../../../core/constants/app_colors.dart';
+import '../../../providers/app_providers.dart';
 import '../../../services/api_client.dart';
 
 const _profileBg = Color(0xFFF8F9FA);
@@ -23,10 +25,113 @@ class _SettingItem {
   });
 }
 
-class ProfileScreen extends StatelessWidget {
+class ProfileScreen extends ConsumerWidget {
   const ProfileScreen({super.key});
 
-  Future<void> _handleLogout(BuildContext context) async {
+  Future<void> _handleLogout(BuildContext context, WidgetRef ref) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => Dialog(
+        backgroundColor: Colors.white,
+        surfaceTintColor: Colors.transparent,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(24, 28, 24, 20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 68,
+                height: 68,
+                decoration: const BoxDecoration(
+                  color: Color(0xFFFEE2E2),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.logout_rounded,
+                  size: 32,
+                  color: _logoutRed,
+                ),
+              ),
+              const SizedBox(height: 18),
+              const Text(
+                'Log Out',
+                style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.w800,
+                  color: _textDark,
+                ),
+              ),
+              const SizedBox(height: 8),
+              const Text(
+                'Are you sure you want to log out of your account?',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 14,
+                  height: 1.5,
+                  color: _textMuted,
+                ),
+              ),
+              const SizedBox(height: 24),
+              Row(
+                children: [
+                  Expanded(
+                    child: SizedBox(
+                      height: 46,
+                      child: OutlinedButton(
+                        onPressed: () => Navigator.pop(ctx, false),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: _textDark,
+                          side: const BorderSide(color: Color(0xFFE2E8F0)),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(24),
+                          ),
+                        ),
+                        child: const Text(
+                          'Cancel',
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: SizedBox(
+                      height: 46,
+                      child: ElevatedButton(
+                        onPressed: () => Navigator.pop(ctx, true),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: _logoutRed,
+                          foregroundColor: Colors.white,
+                          elevation: 0,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(24),
+                          ),
+                        ),
+                        child: const Text(
+                          'Log Out',
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    await ref.read(addressesProvider.notifier).clear();
     await ApiClient.instance.logout();
     if (context.mounted) {
       context.go('/sign-in');
@@ -34,7 +139,7 @@ class ProfileScreen extends StatelessWidget {
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final items = <_SettingItem>[
       _SettingItem(
         icon: Icons.shopping_basket_outlined,
@@ -46,9 +151,10 @@ class ProfileScreen extends StatelessWidget {
         title: 'Favorites',
         onTap: () => context.push('/favorites'),
       ),
-      const _SettingItem(
+      _SettingItem(
         icon: Icons.location_on_outlined,
         title: 'Saved Addresses',
+        onTap: () => context.push('/addresses'),
       ),
       const _SettingItem(
         icon: Icons.credit_card_outlined,
@@ -84,7 +190,7 @@ class ProfileScreen extends StatelessWidget {
               if (i < items.length - 1) const SizedBox(height: 12),
             ],
             const SizedBox(height: 24),
-            _LogoutButton(onTap: () => _handleLogout(context)),
+            _LogoutButton(onTap: () => _handleLogout(context, ref)),
             const SizedBox(height: 20),
             const Center(
               child: Text(
