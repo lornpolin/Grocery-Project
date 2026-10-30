@@ -50,7 +50,11 @@ class OrderController extends Controller
                     ->where('stock_quantity', '>=', $item->quantity)
                     ->decrement('stock_quantity', $item->quantity);
                 if (! $updated) {
-                    abort(response()->json(['message' => "Not enough stock for {$item->product->name}"], 422));
+                    $remaining = (int) Product::where('id', $item->product_id)->value('stock_quantity');
+                    $message = $remaining <= 0
+                        ? "{$item->product->name} is out of stock"
+                        : "Only {$remaining} left in stock for {$item->product->name}";
+                    abort(response()->json(['message' => $message], 422));
                 }
             }
 

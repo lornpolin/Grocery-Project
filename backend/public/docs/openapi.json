@@ -220,7 +220,10 @@
             }
           } } }
         },
-        "responses": { "201": { "description": "Updated cart", "content": { "application/json": { "schema": { "type": "array", "items": { "$ref": "#/components/schemas/CartItem" } } } } } }
+        "responses": {
+          "201": { "description": "Updated cart", "content": { "application/json": { "schema": { "type": "array", "items": { "$ref": "#/components/schemas/CartItem" } } } } },
+          "422": { "description": "Out of stock or exceeds available stock" }
+        }
       },
       "delete": {
         "tags": ["Cart"],
@@ -244,7 +247,10 @@
             "properties": { "quantity": { "type": "integer", "minimum": 0, "example": 3 } }
           } } }
         },
-        "responses": { "200": { "description": "Updated cart" } }
+        "responses": {
+          "200": { "description": "Updated cart" },
+          "422": { "description": "Out of stock or exceeds available stock" }
+        }
       },
       "delete": {
         "tags": ["Cart"],

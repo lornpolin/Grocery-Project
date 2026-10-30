@@ -20,7 +20,7 @@ class CatalogController extends Controller
     {
         $query = Product::query();
 
-        if ($request->filled('category')) {
+        if ($request->filled('category') && strtolower((string) $request->query('category')) !== 'all') {
             $query->where('category_id', $request->query('category'));
         }
         if ($request->filled('q')) {

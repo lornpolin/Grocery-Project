@@ -23,11 +23,25 @@ class CartController extends Controller
             'quantity' => ['sometimes', 'integer', 'min:1'],
         ]);
 
+        $product = Product::findOrFail($data['product_id']);
+        if ($product->stock_quantity <= 0) {
+            return response()->json([
+                'message' => "{$product->name} is out of stock",
+            ], 422);
+        }
+
         $item = CartItem::firstOrNew([
             'user_id' => $request->user()->id,
-            'product_id' => $data['product_id'],
+            'product_id' => $product->id,
         ]);
-        $item->quantity = ($item->exists ? $item->quantity : 0) + ($data['quantity'] ?? 1);
+        $newQuantity = ($item->exists ? $item->quantity : 0) + ($data['quantity'] ?? 1);
+        if ($newQuantity > $product->stock_quantity) {
+            return response()->json([
+                'message' => "Only {$product->stock_quantity} left in stock for {$product->name}",
+            ], 422);
+        }
+
+        $item->quantity = $newQuantity;
         $item->save();
 
         return response()->json($this->items($request), 201);
@@ -42,6 +56,16 @@ class CartController extends Controller
         if ($data['quantity'] === 0) {
             $query->delete();
         } else {
+            if ($product->stock_quantity <= 0) {
+                return response()->json([
+                    'message' => "{$product->name} is out of stock",
+                ], 422);
+            }
+            if ($data['quantity'] > $product->stock_quantity) {
+                return response()->json([
+                    'message' => "Only {$product->stock_quantity} left in stock for {$product->name}",
+                ], 422);
+            }
             $query->update(['quantity' => $data['quantity']]);
         }
 
