@@ -5,6 +5,7 @@ import 'package:flutter_svg/flutter_svg.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/widgets/product_add_stepper_pill.dart';
+import '../../../core/widgets/product_stock_badge.dart';
 import '../../../core/widgets/skeleton_loaders.dart';
 import '../../../models/category.dart';
 import '../../../models/product.dart';
@@ -408,6 +409,7 @@ class _AllProductGridCard extends ConsumerWidget {
                                 const Icon(Icons.error_outline),
                           ),
                         ),
+                        ProductStockOverlay(product: product),
                         Positioned(
                           top: 8,
                           right: 8,

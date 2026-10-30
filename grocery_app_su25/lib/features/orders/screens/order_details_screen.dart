@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/constants/app_colors.dart';
+import '../../../core/widgets/product_stock_badge.dart';
 import '../../../models/cart_item.dart';
 import '../../../models/order.dart';
 import '../../../models/product.dart';
@@ -147,17 +148,39 @@ class _OrderDetailsScreenState extends ConsumerState<OrderDetailsScreen> {
     setState(() => _reordering = true);
     try {
       final cartNotifier = ref.read(cartProvider.notifier);
+      int addedItems = 0;
+      final stockErrors = <String>[];
       for (final item in order.items) {
         final product = _resolveProduct(item.product, catalog);
-        await cartNotifier.addToCart(product, quantity: item.quantity);
+        final err = await cartNotifier.addToCart(
+          product,
+          quantity: item.quantity,
+        );
+        if (err == null) {
+          addedItems += item.quantity;
+        } else {
+          stockErrors.add(err);
+        }
       }
       if (!mounted) return;
+      if (addedItems == 0 && stockErrors.isNotEmpty) {
+        showStockAlertMessage(context, stockErrors.first);
+        return;
+      }
+      if (stockErrors.isNotEmpty) {
+        showStockAlertMessage(
+          context,
+          'Added available items. ${stockErrors.first}',
+        );
+        context.push('/cart');
+        return;
+      }
       ScaffoldMessenger.of(context)
         ..hideCurrentSnackBar()
         ..showSnackBar(
           SnackBar(
             content: Text(
-              'Added ${order.itemCount} item${order.itemCount == 1 ? '' : 's'} from Order #${order.id} to your cart',
+              'Added $addedItems item${addedItems == 1 ? '' : 's'} from Order #${order.id} to your cart',
             ),
             behavior: SnackBarBehavior.floating,
           ),

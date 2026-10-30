@@ -1,8 +1,10 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/constants/app_colors.dart';
+import '../../../core/widgets/product_stock_badge.dart';
 import '../../../models/product.dart';
 import '../../../providers/app_providers.dart';
 import '../../home/widgets/product_tile.dart';
@@ -24,8 +26,23 @@ class ProductDetailsScreen extends ConsumerStatefulWidget {
 }
 
 class _ProductDetailsScreenState extends ConsumerState<ProductDetailsScreen> {
+  final PageController _pageController = PageController();
   int _quantity = 1;
   int _imagePage = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    Future.microtask(() {
+      ref.read(productsProvider.notifier).refreshProduct(widget.product.id);
+    });
+  }
+
+  @override
+  void dispose() {
+    _pageController.dispose();
+    super.dispose();
+  }
 
   void _back(BuildContext context) {
     if (context.canPop()) {
@@ -37,13 +54,36 @@ class _ProductDetailsScreenState extends ConsumerState<ProductDetailsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final product = widget.product;
+    final catalog = ref.watch(productsProvider);
+    Product product = widget.product;
+    for (final p in catalog) {
+      if (p.id == widget.product.id) {
+        product = p;
+        break;
+      }
+    }
+
+    final cartItems = ref.watch(cartProvider);
+    int inCartQty = 0;
+    for (final item in cartItems) {
+      if (item.product.id == product.id) {
+        inCartQty = item.quantity;
+        break;
+      }
+    }
+
+    final isOutOfStock = product.isOutOfStock;
+    final remainingStock = (product.stockQuantity - inCartQty).clamp(
+      0,
+      product.stockQuantity,
+    );
+    final effectiveQty = (!isOutOfStock && remainingStock > 0)
+        ? _quantity.clamp(1, remainingStock)
+        : 1;
+
     final isFavorite = ref.watch(favoriteProvider).contains(product.id);
-    final relatedProducts = ref
-        .watch(productsProvider)
-        .where((p) => p.id != product.id)
-        .toList();
-    final totalPrice = product.price * _quantity;
+    final relatedProducts = catalog.where((p) => p.id != product.id).toList();
+    final totalPrice = product.price * effectiveQty;
 
     return Scaffold(
       backgroundColor: _detailBg,
@@ -103,11 +143,12 @@ class _ProductDetailsScreenState extends ConsumerState<ProductDetailsScreen> {
         children: [
           _HeroWithSummaryCard(
             product: product,
+            pageController: _pageController,
             currentPage: _imagePage,
             onPageChanged: (i) => setState(() => _imagePage = i),
           ),
           Padding(
-            padding: const EdgeInsets.fromLTRB(16, 22, 16, 0),
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 0),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -121,7 +162,7 @@ class _ProductDetailsScreenState extends ConsumerState<ProductDetailsScreen> {
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  '${product.description} Ideal for slow-cooked meals, grilling, or everyday cooking. Freshly sourced and hand-cut for premium quality.',
+                  '${product.description} ',
                   style: const TextStyle(
                     fontSize: 14,
                     height: 1.55,
@@ -175,7 +216,10 @@ class _ProductDetailsScreenState extends ConsumerState<ProductDetailsScreen> {
               child: ListView.separated(
                 scrollDirection: Axis.horizontal,
                 clipBehavior: Clip.none,
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 4,
+                ),
                 itemCount: relatedProducts.length,
                 separatorBuilder: (_, _) => const SizedBox(width: 12),
                 itemBuilder: (_, i) => ProductTile(product: relatedProducts[i]),
@@ -208,23 +252,30 @@ class _ProductDetailsScreenState extends ConsumerState<ProductDetailsScreen> {
                   decoration: BoxDecoration(
                     color: Colors.white,
                     borderRadius: BorderRadius.circular(26),
-                    border: Border.all(color: AppColors.primary, width: 1.3),
+                    border: Border.all(
+                      color: isOutOfStock
+                          ? const Color(0xFFCBD5E1)
+                          : AppColors.primary,
+                      width: 1.3,
+                    ),
                   ),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       InkResponse(
                         onTap: () {
-                          if (_quantity > 1) {
-                            setState(() => _quantity--);
+                          if (!isOutOfStock && effectiveQty > 1) {
+                            setState(() => _quantity = effectiveQty - 1);
                           }
                         },
                         radius: 18,
-                        child: const Padding(
-                          padding: EdgeInsets.all(6),
+                        child: Padding(
+                          padding: const EdgeInsets.all(6),
                           child: Icon(
                             Icons.remove_rounded,
-                            color: AppColors.primary,
+                            color: isOutOfStock
+                                ? const Color(0xFFCBD5E1)
+                                : AppColors.primary,
                             size: 20,
                           ),
                         ),
@@ -232,23 +283,46 @@ class _ProductDetailsScreenState extends ConsumerState<ProductDetailsScreen> {
                       SizedBox(
                         width: 28,
                         child: Text(
-                          '$_quantity',
+                          isOutOfStock ? '0' : '$effectiveQty',
                           textAlign: TextAlign.center,
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontSize: 16,
                             fontWeight: FontWeight.w700,
-                            color: _detailTitle,
+                            color: isOutOfStock
+                                ? const Color(0xFF94A3B8)
+                                : _detailTitle,
                           ),
                         ),
                       ),
                       InkResponse(
-                        onTap: () => setState(() => _quantity++),
+                        onTap: () {
+                          if (isOutOfStock) {
+                            HapticFeedback.heavyImpact();
+                            showStockAlertMessage(
+                              context,
+                              '${product.name} is currently out of stock',
+                            );
+                            return;
+                          }
+                          if (effectiveQty >= remainingStock) {
+                            HapticFeedback.heavyImpact();
+                            showStockAlertMessage(
+                              context,
+                              'Only ${product.stockQuantity} left in stock for ${product.name}',
+                            );
+                            return;
+                          }
+                          setState(() => _quantity = effectiveQty + 1);
+                        },
                         radius: 18,
-                        child: const Padding(
-                          padding: EdgeInsets.all(6),
+                        child: Padding(
+                          padding: const EdgeInsets.all(6),
                           child: Icon(
                             Icons.add_rounded,
-                            color: AppColors.primary,
+                            color:
+                                (isOutOfStock || effectiveQty >= remainingStock)
+                                ? const Color(0xFFCBD5E1)
+                                : AppColors.primary,
                             size: 20,
                           ),
                         ),
@@ -261,27 +335,52 @@ class _ProductDetailsScreenState extends ConsumerState<ProductDetailsScreen> {
                   child: DecoratedBox(
                     decoration: BoxDecoration(
                       borderRadius: BorderRadius.circular(28),
-                      boxShadow: [
-                        BoxShadow(
-                          color: AppColors.primary.withValues(alpha: 0.35),
-                          blurRadius: 12,
-                          offset: const Offset(0, 4),
-                        ),
-                      ],
+                      boxShadow: isOutOfStock
+                          ? null
+                          : [
+                              BoxShadow(
+                                color: AppColors.primary.withValues(
+                                  alpha: 0.35,
+                                ),
+                                blurRadius: 12,
+                                offset: const Offset(0, 4),
+                              ),
+                            ],
                     ),
                     child: SizedBox(
                       height: 50,
                       child: ElevatedButton(
-                        onPressed: () {
-                          ref
+                        onPressed: () async {
+                          if (isOutOfStock) {
+                            HapticFeedback.heavyImpact();
+                            showStockAlertMessage(
+                              context,
+                              '${product.name} is currently out of stock',
+                            );
+                            return;
+                          }
+                          if (remainingStock <= 0) {
+                            HapticFeedback.heavyImpact();
+                            showStockAlertMessage(
+                              context,
+                              'Only ${product.stockQuantity} left in stock for ${product.name}',
+                            );
+                            return;
+                          }
+                          final err = await ref
                               .read(cartProvider.notifier)
-                              .addToCart(product, quantity: _quantity);
+                              .addToCart(product, quantity: effectiveQty);
+                          if (!context.mounted) return;
+                          if (err != null) {
+                            showStockAlertMessage(context, err);
+                            return;
+                          }
                           ScaffoldMessenger.of(context)
                             ..hideCurrentSnackBar()
                             ..showSnackBar(
                               SnackBar(
                                 content: Text(
-                                  '$_quantity × ${product.name} added to cart',
+                                  '$effectiveQty × ${product.name} added to cart',
                                 ),
                                 action: SnackBarAction(
                                   label: 'View cart',
@@ -292,8 +391,12 @@ class _ProductDetailsScreenState extends ConsumerState<ProductDetailsScreen> {
                             );
                         },
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: AppColors.primary,
-                          foregroundColor: Colors.white,
+                          backgroundColor: isOutOfStock
+                              ? const Color(0xFFE2E8F0)
+                              : AppColors.primary,
+                          foregroundColor: isOutOfStock
+                              ? const Color(0xFF64748B)
+                              : Colors.white,
                           elevation: 0,
                           padding: const EdgeInsets.symmetric(horizontal: 16),
                           shape: RoundedRectangleBorder(
@@ -303,21 +406,29 @@ class _ProductDetailsScreenState extends ConsumerState<ProductDetailsScreen> {
                         child: Row(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            const Icon(
-                              Icons.shopping_basket_outlined,
-                              color: Colors.white,
+                            Icon(
+                              isOutOfStock
+                                  ? Icons.error_outline_rounded
+                                  : Icons.shopping_basket_outlined,
+                              color: isOutOfStock
+                                  ? const Color(0xFF64748B)
+                                  : Colors.white,
                               size: 21,
                             ),
                             const SizedBox(width: 10),
                             Flexible(
                               child: Text(
-                                'Add to Cart | \$${totalPrice.toStringAsFixed(2)}',
+                                isOutOfStock
+                                    ? 'Out of Stock'
+                                    : 'Add to Cart | \$${totalPrice.toStringAsFixed(2)}',
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(
+                                style: TextStyle(
                                   fontSize: 15.5,
                                   fontWeight: FontWeight.w700,
-                                  color: Colors.white,
+                                  color: isOutOfStock
+                                      ? const Color(0xFF64748B)
+                                      : Colors.white,
                                 ),
                               ),
                             ),
@@ -338,21 +449,32 @@ class _ProductDetailsScreenState extends ConsumerState<ProductDetailsScreen> {
 
 class _HeroWithSummaryCard extends StatelessWidget {
   final Product product;
+  final PageController pageController;
   final int currentPage;
   final ValueChanged<int> onPageChanged;
 
   const _HeroWithSummaryCard({
     required this.product,
+    required this.pageController,
     required this.currentPage,
     required this.onPageChanged,
   });
+
+  void _goToPage(int index) {
+    if (!pageController.hasClients) return;
+    pageController.animateToPage(
+      index,
+      duration: const Duration(milliseconds: 260),
+      curve: Curves.easeOutCubic,
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
     final oldPrice = product.originalPrice ?? (product.price * 1.25);
     final gallery = product.images.isNotEmpty
         ? product.images
-        : [product.imageUrl, product.imageUrl, product.imageUrl];
+        : (product.imageUrl.isNotEmpty ? [product.imageUrl] : const <String>[]);
 
     return Column(
       children: [
@@ -363,6 +485,8 @@ class _HeroWithSummaryCard extends StatelessWidget {
             fit: StackFit.expand,
             children: [
               PageView.builder(
+                controller: pageController,
+                physics: const BouncingScrollPhysics(),
                 itemCount: gallery.length,
                 onPageChanged: onPageChanged,
                 itemBuilder: (context, index) {
@@ -376,28 +500,76 @@ class _HeroWithSummaryCard extends StatelessWidget {
                   );
                 },
               ),
-              Positioned(
-                left: 0,
-                right: 0,
-                bottom: 42,
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: List.generate(gallery.length, (index) {
-                    final active = index == currentPage;
-                    return Container(
-                      width: 9,
-                      height: 9,
-                      margin: const EdgeInsets.symmetric(horizontal: 3.5),
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: active
-                            ? AppColors.primary
-                            : const Color(0xFFD8DEE9),
-                      ),
-                    );
-                  }),
+              if (product.isOutOfStock)
+                IgnorePointer(
+                  child: ColoredBox(
+                    color: Colors.white.withValues(alpha: 0.38),
+                  ),
                 ),
-              ),
+              if (gallery.length > 1 && currentPage > 0)
+                Positioned(
+                  left: 12,
+                  top: 0,
+                  bottom: 28,
+                  child: Center(
+                    child: _GalleryNavButton(
+                      icon: Icons.chevron_left_rounded,
+                      onTap: () => _goToPage(currentPage - 1),
+                    ),
+                  ),
+                ),
+              if (gallery.length > 1 && currentPage < gallery.length - 1)
+                Positioned(
+                  right: 12,
+                  top: 0,
+                  bottom: 28,
+                  child: Center(
+                    child: _GalleryNavButton(
+                      icon: Icons.chevron_right_rounded,
+                      onTap: () => _goToPage(currentPage + 1),
+                    ),
+                  ),
+                ),
+              if (gallery.length > 1)
+                Positioned(
+                  left: 0,
+                  right: 0,
+                  bottom: 42,
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: List.generate(gallery.length, (index) {
+                      final active = index == currentPage;
+                      return GestureDetector(
+                        onTap: () => _goToPage(index),
+                        behavior: HitTestBehavior.opaque,
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 4,
+                            vertical: 6,
+                          ),
+                          child: AnimatedContainer(
+                            duration: const Duration(milliseconds: 220),
+                            curve: Curves.easeOut,
+                            width: active ? 20 : 8,
+                            height: 8,
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(4),
+                              color: active
+                                  ? AppColors.primary
+                                  : Colors.white.withValues(alpha: 0.8),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withValues(alpha: 0.12),
+                                  blurRadius: 4,
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      );
+                    }),
+                  ),
+                ),
             ],
           ),
         ),
@@ -427,7 +599,7 @@ class _HeroWithSummaryCard extends StatelessWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'Premium Boneless\n${product.name}',
+                          '${product.name}',
                           style: const TextStyle(
                             fontSize: 21,
                             fontWeight: FontWeight.w800,
@@ -445,23 +617,16 @@ class _HeroWithSummaryCard extends StatelessWidget {
                           ),
                         ),
                         const SizedBox(height: 14),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 6,
-                          ),
-                          decoration: BoxDecoration(
-                            color: _detailSoftBlue,
-                            borderRadius: BorderRadius.circular(20),
-                          ),
-                          child: const Text(
-                            'Bestseller',
-                            style: TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w600,
-                              color: AppColors.primary,
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 6,
+                          crossAxisAlignment: WrapCrossAlignment.center,
+                          children: [
+                            ProductStockStatusBadge(
+                              product: product,
+                              showInStock: true,
                             ),
-                          ),
+                          ],
                         ),
                       ],
                     ),
@@ -491,10 +656,7 @@ class _HeroWithSummaryCard extends StatelessWidget {
                       const SizedBox(height: 2),
                       const Text(
                         'Approx.',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: _detailMuted,
-                        ),
+                        style: TextStyle(fontSize: 12, color: _detailMuted),
                       ),
                       Text(
                         product.unit,
@@ -576,6 +738,32 @@ class _NutritionGrid extends StatelessWidget {
           ),
         );
       },
+    );
+  }
+}
+
+class _GalleryNavButton extends StatelessWidget {
+  final IconData icon;
+  final VoidCallback onTap;
+
+  const _GalleryNavButton({required this.icon, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.white.withValues(alpha: 0.85),
+      shape: const CircleBorder(),
+      elevation: 2,
+      shadowColor: Colors.black.withValues(alpha: 0.15),
+      child: InkWell(
+        customBorder: const CircleBorder(),
+        onTap: onTap,
+        child: SizedBox(
+          width: 34,
+          height: 34,
+          child: Icon(icon, size: 22, color: _detailTitle),
+        ),
+      ),
     );
   }
 }

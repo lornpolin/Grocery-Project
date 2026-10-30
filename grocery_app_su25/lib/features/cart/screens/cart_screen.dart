@@ -3,7 +3,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/constants/app_colors.dart';
+import '../../../core/widgets/product_stock_badge.dart';
 import '../../../models/cart_item.dart';
+import '../../../models/product.dart';
 import '../../../providers/app_providers.dart';
 import '../../home/widgets/product_tile.dart';
 import '../widgets/checkout_widgets.dart';
@@ -109,26 +111,54 @@ class _CartLine extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final notifier = ref.read(cartProvider.notifier);
     final p = item.product;
+    final catalog = ref.watch(productsProvider);
+    Product liveProduct = p;
+    for (final cp in catalog) {
+      if (cp.id == p.id) {
+        liveProduct = cp;
+        break;
+      }
+    }
+    final isOutOfStock = liveProduct.isOutOfStock;
+    final reachedMaxStock =
+        isOutOfStock || item.quantity >= liveProduct.stockQuantity;
+    final exceedsStock =
+        !isOutOfStock && item.quantity > liveProduct.stockQuantity;
 
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 10),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(
-            width: 58,
-            height: 58,
-            decoration: BoxDecoration(
-              color: const Color(0xFFF1F5F9),
-              borderRadius: BorderRadius.circular(10),
-            ),
-            clipBehavior: Clip.antiAlias,
-            child: CachedNetworkImage(
-              imageUrl: p.imageUrl,
-              fit: BoxFit.cover,
-              errorWidget: (_, _, _) => const Icon(Icons.image_not_supported_outlined,
-                  color: CheckoutColors.hint),
-            ),
+          Stack(
+            children: [
+              Container(
+                width: 58,
+                height: 58,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF1F5F9),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                clipBehavior: Clip.antiAlias,
+                child: CachedNetworkImage(
+                  imageUrl: p.imageUrl,
+                  fit: BoxFit.cover,
+                  errorWidget: (_, _, _) => const Icon(
+                    Icons.image_not_supported_outlined,
+                    color: CheckoutColors.hint,
+                  ),
+                ),
+              ),
+              if (isOutOfStock)
+                Positioned.fill(
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.45),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                  ),
+                ),
+            ],
           ),
           const SizedBox(width: 14),
           Expanded(
@@ -144,6 +174,20 @@ class _CartLine extends ConsumerWidget {
                           fontSize: 15,
                           fontWeight: FontWeight.w500,
                           color: CheckoutColors.title)),
+                  if (isOutOfStock) ...[
+                    const SizedBox(height: 4),
+                    ProductStockStatusBadge(product: liveProduct),
+                  ] else if (exceedsStock) ...[
+                    const SizedBox(height: 4),
+                    Text(
+                      'Only ${liveProduct.stockQuantity} left in stock',
+                      style: const TextStyle(
+                        fontSize: 11.5,
+                        fontWeight: FontWeight.w700,
+                        color: Color(0xFFDC2626),
+                      ),
+                    ),
+                  ],
                   const SizedBox(height: 6),
                   Row(
                     crossAxisAlignment: CrossAxisAlignment.baseline,
@@ -183,7 +227,16 @@ class _CartLine extends ConsumerWidget {
           ),
           _QtyButton(
             icon: Icons.add,
-            onTap: () => notifier.updateQuantity(p.id, item.quantity + 1),
+            dimmed: reachedMaxStock,
+            onTap: () async {
+              final err = await notifier.updateQuantity(
+                p.id,
+                item.quantity + 1,
+              );
+              if (err != null && context.mounted) {
+                showStockAlertMessage(context, err);
+              }
+            },
           ),
         ],
       ),
@@ -194,10 +247,16 @@ class _CartLine extends ConsumerWidget {
 class _QtyButton extends StatelessWidget {
   final IconData icon;
   final VoidCallback onTap;
-  const _QtyButton({required this.icon, required this.onTap});
+  final bool dimmed;
+  const _QtyButton({
+    required this.icon,
+    required this.onTap,
+    this.dimmed = false,
+  });
 
   @override
   Widget build(BuildContext context) {
+    final color = dimmed ? const Color(0xFFCBD5E1) : AppColors.primary;
     return InkResponse(
       onTap: onTap,
       radius: 18,
@@ -206,9 +265,9 @@ class _QtyButton extends StatelessWidget {
         height: 24,
         decoration: BoxDecoration(
           shape: BoxShape.circle,
-          border: Border.all(color: AppColors.primary, width: 1.6),
+          border: Border.all(color: color, width: 1.6),
         ),
-        child: Icon(icon, size: 15, color: AppColors.primary),
+        child: Icon(icon, size: 15, color: color),
       ),
     );
   }

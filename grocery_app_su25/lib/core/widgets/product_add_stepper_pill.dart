@@ -4,10 +4,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../models/product.dart';
 import '../../providers/app_providers.dart';
 import '../constants/app_colors.dart';
+import 'product_stock_badge.dart';
 
-/// Animated overhanging pill button that morphs smoothly between an "+ Add"
-/// button (when quantity == 0) and a "(-)  1  (+)" quantity stepper pill
-/// (when quantity >= 1 in the cart).
+/// Animated overhanging pill button that morphs smoothly between:
+/// - "Out of Stock" pill (when stockQuantity <= 0 and quantity == 0)
+/// - "+ Add" button (when quantity == 0 and in stock)
+/// - "(-)  1  (+)" quantity stepper pill (when quantity >= 1 in the cart)
 class ProductAddStepperPill extends ConsumerStatefulWidget {
   final Product product;
   final bool compact;
@@ -61,44 +63,92 @@ class _ProductAddStepperPillState extends ConsumerState<ProductAddStepperPill>
     _pulseController.forward(from: 0);
   }
 
-  void _handleAdd() {
+  void _handleOutOfStockTap(Product liveProduct) {
+    HapticFeedback.heavyImpact();
+    showStockAlertMessage(
+      context,
+      '${liveProduct.name} is currently out of stock',
+    );
+  }
+
+  Future<void> _handleAdd(Product liveProduct) async {
+    if (liveProduct.isOutOfStock) {
+      _handleOutOfStockTap(liveProduct);
+      return;
+    }
     HapticFeedback.lightImpact();
     _triggerPulse();
-    ref.read(cartProvider.notifier).addToCart(widget.product);
-    widget.onFirstAdd?.call();
+    final err = await ref.read(cartProvider.notifier).addToCart(liveProduct);
+    if (!mounted) return;
+    if (err != null) {
+      showStockAlertMessage(context, err);
+    } else {
+      widget.onFirstAdd?.call();
+    }
   }
 
-  void _handleIncrement(int currentQty) {
+  Future<void> _handleIncrement(Product liveProduct, int currentQty) async {
+    if (liveProduct.isOutOfStock) {
+      _handleOutOfStockTap(liveProduct);
+      return;
+    }
+    if (currentQty >= liveProduct.stockQuantity) {
+      HapticFeedback.heavyImpact();
+      showStockAlertMessage(
+        context,
+        'Only ${liveProduct.stockQuantity} left in stock for ${liveProduct.name}',
+      );
+      return;
+    }
     HapticFeedback.selectionClick();
     _triggerPulse();
-    ref
+    final err = await ref
         .read(cartProvider.notifier)
-        .updateQuantity(widget.product.id, currentQty + 1);
+        .updateQuantity(liveProduct.id, currentQty + 1);
+    if (!mounted) return;
+    if (err != null) {
+      showStockAlertMessage(context, err);
+    }
   }
 
-  void _handleDecrement(int currentQty) {
+  Future<void> _handleDecrement(Product liveProduct, int currentQty) async {
     HapticFeedback.selectionClick();
     _triggerPulse();
-    ref
+    await ref
         .read(cartProvider.notifier)
-        .updateQuantity(widget.product.id, currentQty - 1);
+        .updateQuantity(liveProduct.id, currentQty - 1);
   }
 
   @override
   Widget build(BuildContext context) {
+    final catalog = ref.watch(productsProvider);
+    Product liveProduct = widget.product;
+    for (final p in catalog) {
+      if (p.id == widget.product.id) {
+        liveProduct = p;
+        break;
+      }
+    }
+
     final cartItems = ref.watch(cartProvider);
     int quantity = 0;
     for (final item in cartItems) {
-      if (item.product.id == widget.product.id) {
+      if (item.product.id == liveProduct.id) {
         quantity = item.quantity;
         break;
       }
     }
 
     final isAdded = quantity > 0;
+    final isOutOfStock = liveProduct.isOutOfStock && !isAdded;
+    final reachedMaxStock =
+        isAdded && quantity >= liveProduct.stockQuantity;
+
     final pillHeight = widget.compact ? 32.0 : 34.0;
     final expandedWidth = widget.compact ? 106.0 : 114.0;
-    final collapsedWidth = widget.compact ? 76.0 : 84.0;
+    final collapsedWidth = isOutOfStock
+        ? (widget.compact ? 94.0 : 102.0)
+        : (widget.compact ? 76.0 : 84.0);
     final circleSize = widget.compact ? 22.0 : 24.0;
 
     return ScaleTransition(
@@ -109,15 +159,17 @@ class _ProductAddStepperPillState extends ConsumerState<ProductAddStepperPill>
         width: isAdded ? expandedWidth : collapsedWidth,
         height: pillHeight,
         decoration: BoxDecoration(
-          color: AppColors.primary,
+          color: isOutOfStock ? const Color(0xFFE2E8F0) : AppColors.primary,
           borderRadius: BorderRadius.circular(pillHeight / 2),
-          boxShadow: [
-            BoxShadow(
-              color: AppColors.primary.withValues(alpha: 0.35),
-              blurRadius: 8,
-              offset: const Offset(0, 3),
-            ),
-          ],
+          boxShadow: isOutOfStock
+              ? null
+              : [
+                  BoxShadow(
+                    color: AppColors.primary.withValues(alpha: 0.35),
+                    blurRadius: 8,
+                    offset: const Offset(0, 3),
+                  ),
+                ],
         ),
         child: Material(
           color: Colors.transparent,
@@ -144,7 +196,7 @@ class _ProductAddStepperPillState extends ConsumerState<ProductAddStepperPill>
                         _CircleStepIconButton(
                           size: circleSize,
                           icon: Icons.remove_rounded,
-                          onTap: () => _handleDecrement(quantity),
+                          onTap: () => _handleDecrement(liveProduct, quantity),
                         ),
                         Expanded(
                           child: Center(
@@ -174,37 +226,54 @@ class _ProductAddStepperPillState extends ConsumerState<ProductAddStepperPill>
                         _CircleStepIconButton(
                           size: circleSize,
                           icon: Icons.add_rounded,
-                          onTap: () => _handleIncrement(quantity),
+                          dimmed: reachedMaxStock,
+                          onTap: () => _handleIncrement(liveProduct, quantity),
                         ),
                       ],
                     ),
                   )
-                : InkWell(
-                    key: const ValueKey('add_btn'),
-                    borderRadius: BorderRadius.circular(pillHeight / 2),
-                    onTap: _handleAdd,
-                    child: Center(
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(
-                            Icons.add_circle_outline,
-                            color: Colors.white,
-                            size: widget.compact ? 15 : 16,
-                          ),
-                          const SizedBox(width: 5),
-                          Text(
-                            'Add',
+                : isOutOfStock
+                    ? InkWell(
+                        key: const ValueKey('out_of_stock_btn'),
+                        borderRadius: BorderRadius.circular(pillHeight / 2),
+                        onTap: () => _handleOutOfStockTap(liveProduct),
+                        child: Center(
+                          child: Text(
+                            'Out of Stock',
                             style: TextStyle(
-                              color: Colors.white,
-                              fontWeight: FontWeight.w600,
-                              fontSize: widget.compact ? 12.5 : 13,
+                              color: const Color(0xFF64748B),
+                              fontWeight: FontWeight.w700,
+                              fontSize: widget.compact ? 11.0 : 11.5,
                             ),
                           ),
-                        ],
+                        ),
+                      )
+                    : InkWell(
+                        key: const ValueKey('add_btn'),
+                        borderRadius: BorderRadius.circular(pillHeight / 2),
+                        onTap: () => _handleAdd(liveProduct),
+                        child: Center(
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                Icons.add_circle_outline,
+                                color: Colors.white,
+                                size: widget.compact ? 15 : 16,
+                              ),
+                              const SizedBox(width: 5),
+                              Text(
+                                'Add',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: widget.compact ? 12.5 : 13,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
                       ),
-                    ),
-                  ),
           ),
         ),
       ),
@@ -216,15 +285,19 @@ class _CircleStepIconButton extends StatelessWidget {
   final double size;
   final IconData icon;
   final VoidCallback onTap;
+  final bool dimmed;
 
   const _CircleStepIconButton({
     required this.size,
     required this.icon,
     required this.onTap,
+    this.dimmed = false,
   });
 
   @override
   Widget build(BuildContext context) {
+    final color =
+        dimmed ? Colors.white.withValues(alpha: 0.45) : Colors.white;
     return InkResponse(
       onTap: onTap,
       radius: size * 0.75,
@@ -235,17 +308,16 @@ class _CircleStepIconButton extends StatelessWidget {
         decoration: BoxDecoration(
           shape: BoxShape.circle,
           border: Border.all(
-            color: Colors.white,
+            color: color,
             width: 1.6,
           ),
         ),
         child: Icon(
           icon,
-          color: Colors.white,
+          color: color,
           size: size * 0.68,
         ),
       ),
     );
   }
 }
-

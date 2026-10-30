@@ -59,6 +59,23 @@ class ProductsNotifier extends StateNotifier<List<Product>> {
       }
     } catch (_) {}
   }
+
+  Future<Product?> refreshProduct(String id) async {
+    try {
+      final fresh = await ApiClient.instance.fetchProduct(id);
+      final idx = state.indexWhere((p) => p.id == id);
+      if (idx >= 0) {
+        final next = [...state];
+        next[idx] = fresh;
+        state = next;
+      } else {
+        state = [fresh, ...state];
+      }
+      return fresh;
+    } catch (_) {
+      return null;
+    }
+  }
 }
 
 final productsProvider = StateNotifierProvider<ProductsNotifier, List<Product>>(
@@ -69,7 +86,9 @@ final productsProvider = StateNotifierProvider<ProductsNotifier, List<Product>>(
 
 // Cart Provider
 class CartNotifier extends StateNotifier<List<CartItem>> {
-  CartNotifier() : super(const []) {
+  final Ref _ref;
+
+  CartNotifier(this._ref) : super(const []) {
     _load();
   }
 
@@ -77,6 +96,13 @@ class CartNotifier extends StateNotifier<List<CartItem>> {
       AuthState.instance.token != null && AuthState.instance.token!.isNotEmpty;
 
   Future<void> refresh() => _load();
+
+  Product? _findCatalogProduct(String productId) {
+    for (final p in _ref.read(productsProvider)) {
+      if (p.id == productId) return p;
+    }
+    return null;
+  }
 
   Future<void> _load() async {
     if (_hasToken) {
@@ -117,13 +143,29 @@ class CartNotifier extends StateNotifier<List<CartItem>> {
     );
   }
 
-  Future<void> addToCart(Product product, {int quantity = 1}) async {
+  /// Adds [quantity] of [product] to the cart.
+  /// Returns `null` on success, or an error message if out of stock / exceeds stock.
+  Future<String?> addToCart(Product product, {int quantity = 1}) async {
+    final liveProduct = _findCatalogProduct(product.id) ?? product;
+    if (liveProduct.isOutOfStock) {
+      _ref.read(productsProvider.notifier).refreshProduct(liveProduct.id);
+      return '${liveProduct.name} is currently out of stock';
+    }
+
     final existingItemIndex = state.indexWhere(
-      (item) => item.product.id == product.id,
+      (item) => item.product.id == liveProduct.id,
     );
+    final currentQty =
+        existingItemIndex >= 0 ? state[existingItemIndex].quantity : 0;
+    if (currentQty + quantity > liveProduct.stockQuantity) {
+      return 'Only ${liveProduct.stockQuantity} left in stock for ${liveProduct.name}';
+    }
+
+    final previousState = state;
     if (existingItemIndex >= 0) {
       final updatedItem = state[existingItemIndex].copyWith(
-        quantity: state[existingItemIndex].quantity + quantity,
+        product: liveProduct,
+        quantity: currentQty + quantity,
       );
       final newState = [...state];
       newState[existingItemIndex] = updatedItem;
@@ -133,7 +175,7 @@ class CartNotifier extends StateNotifier<List<CartItem>> {
         ...state,
         CartItem(
           id: DateTime.now().millisecondsSinceEpoch.toString(),
-          product: product,
+          product: liveProduct,
           quantity: quantity,
         ),
       ];
@@ -143,13 +185,22 @@ class CartNotifier extends StateNotifier<List<CartItem>> {
     if (_hasToken) {
       try {
         final remoteCart = await ApiClient.instance.addToCart(
-          product.id,
+          liveProduct.id,
           quantity: quantity,
         );
         state = remoteCart;
         _saveLocal();
+      } on ApiException catch (e) {
+        if (!e.isNetworkError) {
+          state = previousState;
+          _saveLocal();
+          _ref.read(productsProvider.notifier).refresh();
+          _load();
+          return e.message;
+        }
       } catch (_) {}
     }
+    return null;
   }
 
   Future<void> removeFromCart(String productId) async {
@@ -165,14 +216,32 @@ class CartNotifier extends StateNotifier<List<CartItem>> {
     }
   }
 
-  Future<void> updateQuantity(String productId, int quantity) async {
+  /// Updates [productId] quantity in the cart.
+  /// Returns `null` on success, or an error message if out of stock / exceeds stock.
+  Future<String?> updateQuantity(String productId, int quantity) async {
     if (quantity <= 0) {
       await removeFromCart(productId);
-      return;
+      return null;
     }
     final existingItemIndex = state.indexWhere(
       (item) => item.product.id == productId,
     );
+    final currentQty =
+        existingItemIndex >= 0 ? state[existingItemIndex].quantity : 0;
+    final liveProduct = _findCatalogProduct(productId) ??
+        (existingItemIndex >= 0 ? state[existingItemIndex].product : null);
+
+    if (quantity > currentQty && liveProduct != null) {
+      if (liveProduct.isOutOfStock) {
+        _ref.read(productsProvider.notifier).refreshProduct(productId);
+        return '${liveProduct.name} is currently out of stock';
+      }
+      if (quantity > liveProduct.stockQuantity) {
+        return 'Only ${liveProduct.stockQuantity} left in stock for ${liveProduct.name}';
+      }
+    }
+
+    final previousState = state;
     if (existingItemIndex >= 0) {
       final updatedItem = state[existingItemIndex].copyWith(quantity: quantity);
       final newState = [...state];
@@ -189,8 +258,17 @@ class CartNotifier extends StateNotifier<List<CartItem>> {
         );
         state = remoteCart;
         _saveLocal();
+      } on ApiException catch (e) {
+        if (!e.isNetworkError) {
+          state = previousState;
+          _saveLocal();
+          _ref.read(productsProvider.notifier).refresh();
+          _load();
+          return e.message;
+        }
       } catch (_) {}
     }
+    return null;
   }
 
   Future<void> clearCart() async {
@@ -210,7 +288,7 @@ class CartNotifier extends StateNotifier<List<CartItem>> {
 }
 
 final cartProvider = StateNotifierProvider<CartNotifier, List<CartItem>>((ref) {
-  return CartNotifier();
+  return CartNotifier(ref);
 });
 
 /// Reactive cart total; rebuilds watchers whenever the cart changes.
@@ -352,7 +430,35 @@ class OrdersNotifier extends StateNotifier<List<Order>> {
         state = [created, ...state];
         _ref.read(addressesProvider.notifier).refresh();
         return created;
+      } on ApiException catch (e) {
+        if (!e.isNetworkError) {
+          _ref.read(productsProvider.notifier).refresh();
+          _ref.read(cartProvider.notifier).refresh();
+          rethrow;
+        }
       } catch (_) {}
+    }
+
+    await _ref.read(productsProvider.notifier).refresh();
+    final latestCatalog = _ref.read(productsProvider);
+    for (final item in items) {
+      for (final p in latestCatalog) {
+        if (p.id == item.product.id) {
+          if (p.isOutOfStock) {
+            throw ApiException(
+              '${p.name} is currently out of stock',
+              statusCode: 422,
+            );
+          }
+          if (item.quantity > p.stockQuantity) {
+            throw ApiException(
+              'Only ${p.stockQuantity} left in stock for ${p.name}',
+              statusCode: 422,
+            );
+          }
+          break;
+        }
+      }
     }
 
     final fallback = Order(

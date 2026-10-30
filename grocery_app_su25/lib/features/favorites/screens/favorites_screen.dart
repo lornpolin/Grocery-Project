@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/widgets/product_add_stepper_pill.dart';
+import '../../../core/widgets/product_stock_badge.dart';
 import '../../../models/product.dart';
 import '../../../providers/app_providers.dart';
 import '../../cart/widgets/checkout_widgets.dart';
@@ -100,17 +101,39 @@ class FavoritesScreen extends ConsumerWidget {
               children: [
                 _FavoritesBannerCard(
                   count: favoriteProducts.length,
-                  onAddAll: () {
+                  onAddAll: () async {
                     final cartNotifier = ref.read(cartProvider.notifier);
+                    int addedCount = 0;
+                    final skippedNames = <String>[];
                     for (final product in favoriteProducts) {
-                      cartNotifier.addToCart(product);
+                      final err = await cartNotifier.addToCart(product);
+                      if (err == null) {
+                        addedCount++;
+                      } else {
+                        skippedNames.add(product.name);
+                      }
+                    }
+                    if (!context.mounted) return;
+                    if (addedCount == 0 && skippedNames.isNotEmpty) {
+                      showStockAlertMessage(
+                        context,
+                        '${skippedNames.join(', ')} ${skippedNames.length == 1 ? 'is' : 'are'} currently out of stock',
+                      );
+                      return;
+                    }
+                    if (skippedNames.isNotEmpty) {
+                      showStockAlertMessage(
+                        context,
+                        'Added $addedCount item${addedCount == 1 ? '' : 's'}. Out of stock: ${skippedNames.join(', ')}',
+                      );
+                      return;
                     }
                     ScaffoldMessenger.of(context)
                       ..hideCurrentSnackBar()
                       ..showSnackBar(
                         SnackBar(
                           content: Text(
-                            'Added ${favoriteProducts.length} item${favoriteProducts.length == 1 ? '' : 's'} to cart',
+                            'Added $addedCount item${addedCount == 1 ? '' : 's'} to cart',
                           ),
                           action: SnackBarAction(
                             label: 'View cart',
@@ -286,6 +309,7 @@ class _FavoriteProductCard extends ConsumerWidget {
                                 const Icon(Icons.error_outline),
                           ),
                         ),
+                        ProductStockOverlay(product: product),
                         Positioned(
                           top: 8,
                           right: 8,

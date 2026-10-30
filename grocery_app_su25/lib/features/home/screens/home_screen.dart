@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/widgets/category_icon.dart';
 import '../../../core/widgets/product_add_stepper_pill.dart';
+import '../../../core/widgets/product_stock_badge.dart';
 import '../../../core/widgets/skeleton_loaders.dart';
 import '../../../models/category.dart';
 import '../../../models/product.dart';
@@ -573,6 +574,7 @@ class _HomeSearchGridCard extends ConsumerWidget {
                                 const Icon(Icons.error_outline),
                           ),
                         ),
+                        ProductStockOverlay(product: product),
                         Positioned(
                           top: 8,
                           right: 8,
@@ -1009,6 +1011,7 @@ class ProductCard extends ConsumerWidget {
                         const Icon(Icons.error),
                   ),
                 ),
+                ProductStockOverlay(product: product),
                 Positioned(
                   top: 8,
                   right: 8,
@@ -1060,8 +1063,15 @@ class ProductCard extends ConsumerWidget {
                       ),
                     ),
                     InkWell(
-                      onTap: () {
-                        ref.read(cartProvider.notifier).addToCart(product);
+                      onTap: () async {
+                        final err = await ref
+                            .read(cartProvider.notifier)
+                            .addToCart(product);
+                        if (!context.mounted) return;
+                        if (err != null) {
+                          showStockAlertMessage(context, err);
+                          return;
+                        }
                         ScaffoldMessenger.of(context).showSnackBar(
                           SnackBar(
                             content: Text('${product.name} added to cart'),
@@ -1071,12 +1081,18 @@ class ProductCard extends ConsumerWidget {
                       child: Container(
                         padding: const EdgeInsets.all(8),
                         decoration: BoxDecoration(
-                          color: theme.colorScheme.primary,
+                          color: product.isOutOfStock
+                              ? const Color(0xFFE2E8F0)
+                              : theme.colorScheme.primary,
                           borderRadius: BorderRadius.circular(8),
                         ),
-                        child: const Icon(
-                          Icons.add,
-                          color: Colors.white,
+                        child: Icon(
+                          product.isOutOfStock
+                              ? Icons.block_rounded
+                              : Icons.add,
+                          color: product.isOutOfStock
+                              ? const Color(0xFF64748B)
+                              : Colors.white,
                           size: 20,
                         ),
                       ),

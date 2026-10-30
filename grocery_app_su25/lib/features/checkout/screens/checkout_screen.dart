@@ -2,8 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/constants/app_colors.dart';
+import '../../../core/widgets/product_stock_badge.dart';
 import '../../../models/address.dart';
+import '../../../models/order.dart';
 import '../../../providers/app_providers.dart';
+import '../../../services/api_client.dart';
 import '../../addresses/screens/addresses_screen.dart';
 import '../../cart/widgets/checkout_widgets.dart';
 
@@ -28,6 +31,7 @@ class CheckoutScreen extends ConsumerStatefulWidget {
 class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
   PaymentMethod _payment = PaymentMethod.cash;
   final _instructions = TextEditingController();
+  bool _placingOrder = false;
 
   @override
   void dispose() {
@@ -209,6 +213,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     double subtotal,
     SavedAddress? selectedAddress,
   ) async {
+    if (_placingOrder) return;
     if (selectedAddress == null) {
       ScaffoldMessenger.of(context)
         ..hideCurrentSnackBar()
@@ -222,19 +227,40 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
       return;
     }
 
+    setState(() => _placingOrder = true);
     final items = ref.read(cartProvider);
     final resolvedAddress = selectedAddress.fullAddress;
-    final order = await ref.read(ordersProvider.notifier).placeOrder(
-          items: items,
-          subtotal: subtotal,
-          address: resolvedAddress,
-          addressId: selectedAddress.id,
-          instructions: _instructions.text.trim(),
-          paymentMethod: _payment.label,
+    late final Order order;
+    try {
+      order = await ref.read(ordersProvider.notifier).placeOrder(
+            items: items,
+            subtotal: subtotal,
+            address: resolvedAddress,
+            addressId: selectedAddress.id,
+            instructions: _instructions.text.trim(),
+            paymentMethod: _payment.label,
+          );
+    } on ApiException catch (e) {
+      if (mounted) {
+        setState(() => _placingOrder = false);
+        showStockAlertMessage(context, e.message);
+      }
+      return;
+    } catch (_) {
+      if (mounted) {
+        setState(() => _placingOrder = false);
+        showStockAlertMessage(
+          context,
+          'Unable to place order right now. Please try again.',
         );
+      }
+      return;
+    }
+
     await ref.read(cartProvider.notifier).clearCart();
     ref.read(productsProvider.notifier).refresh();
     if (!mounted) return;
+    setState(() => _placingOrder = false);
 
     await showDialog<void>(
       context: context,
@@ -381,8 +407,8 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                 TotalWithVoucher(total: total),
                 const SizedBox(height: 14),
                 PillButton(
-                  label: 'Place Order',
-                  onPressed: hasItems
+                  label: _placingOrder ? 'Checking Stock...' : 'Place Order',
+                  onPressed: (hasItems && !_placingOrder)
                       ? () => _placeOrder(subtotal, selectedAddress)
                       : null,
                 ),

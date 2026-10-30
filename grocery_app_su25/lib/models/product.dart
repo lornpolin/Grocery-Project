@@ -25,6 +25,9 @@ class Product {
     this.isFavorite = false,
   });
 
+  bool get isOutOfStock => stockQuantity <= 0;
+  bool get isLowStock => stockQuantity > 0 && stockQuantity <= 5;
+
   factory Product.fromJson(Map<String, dynamic> json) {
     final rawImages = (json['images'] as List<dynamic>?)
             ?.map((e) => e.toString())
@@ -50,7 +53,8 @@ class Product {
       unit: (json['unit'] ?? '').toString(),
       categoryId: (json['categoryId'] ?? json['category_id'] ?? '').toString(),
       stockQuantity:
-          (json['stockQuantity'] ?? json['stock_quantity'] as num?)?.toInt() ??
+          ((json['stockQuantity'] ?? json['stock_quantity']) as num?)
+                  ?.toInt() ??
               0,
       isFavorite: json['isFavorite'] == true,
     );
