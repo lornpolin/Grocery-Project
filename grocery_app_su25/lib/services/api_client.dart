@@ -1,3 +1,4 @@
+import 'dart:typed_data';
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart'
     show TargetPlatform, defaultTargetPlatform, kIsWeb;
@@ -39,15 +40,83 @@ class ApiClient {
 
     _dio.interceptors.add(
       InterceptorsWrapper(
-        onRequest: (options, handler) {
-          final token = AuthState.instance.token;
+        onRequest: (options, handler) async {
+          var token = AuthState.instance.token;
+          if (token == null || token.isEmpty) {
+            await AuthState.instance.load();
+            token = AuthState.instance.token;
+          }
           if (token != null && token.isNotEmpty) {
             options.headers['Authorization'] = 'Bearer $token';
           }
           handler.next(options);
         },
+        onError: (e, handler) async {
+          final status = e.response?.statusCode;
+          final path = e.requestOptions.path;
+          final alreadyRetried = e.requestOptions.extra['_retried'] == true;
+          final currentToken = AuthState.instance.token;
+
+          if (status == 401 &&
+              !alreadyRetried &&
+              currentToken != null &&
+              currentToken.isNotEmpty &&
+              !path.startsWith('/auth/')) {
+            final refreshed = await _tryRefreshToken(currentToken);
+            if (refreshed) {
+              final retryOpts = e.requestOptions;
+              retryOpts.extra['_retried'] = true;
+              retryOpts.headers['Authorization'] =
+                  'Bearer ${AuthState.instance.token}';
+              try {
+                final retryResponse = await _dio.fetch(retryOpts);
+                return handler.resolve(retryResponse);
+              } on DioException catch (retryErr) {
+                return handler.next(retryErr);
+              }
+            }
+          }
+          handler.next(e);
+        },
       ),
     );
+  }
+
+  bool _isRefreshing = false;
+
+  Future<bool> _tryRefreshToken(String expiredToken) async {
+    if (_isRefreshing) return false;
+    _isRefreshing = true;
+    try {
+      final res = await _dio.post(
+        '/auth/refresh',
+        options: Options(
+          headers: {'Authorization': 'Bearer $expiredToken'},
+          extra: const {'_retried': true},
+        ),
+      );
+      final body = res.data as Map<String, dynamic>;
+      final newToken = (body['token'] ?? '').toString();
+      if (newToken.isEmpty) return false;
+      final user = (body['user'] as Map<String, dynamic>?) ?? const {};
+      await AuthState.instance.setAuthSession(
+        token: newToken,
+        id: (user['id'] ?? AuthState.instance.userId ?? '').toString(),
+        name: (user['name'] ?? AuthState.instance.userName).toString(),
+        email: (user['email'] ?? AuthState.instance.userEmail).toString(),
+        phone: (user['phone'] ?? AuthState.instance.userPhone)?.toString(),
+        avatarUrl:
+            (user['avatarUrl'] ??
+                    user['avatar_url'] ??
+                    AuthState.instance.userAvatarUrl)
+                ?.toString(),
+      );
+      return true;
+    } catch (_) {
+      return false;
+    } finally {
+      _isRefreshing = false;
+    }
   }
 
   static final ApiClient instance = ApiClient._();
@@ -79,7 +148,8 @@ class ApiClient {
   }
 
   ApiException _mapDioError(DioException e) {
-    final isNet = e.type == DioExceptionType.connectionError ||
+    final isNet =
+        e.type == DioExceptionType.connectionError ||
         e.type == DioExceptionType.connectionTimeout ||
         e.type == DioExceptionType.sendTimeout ||
         e.type == DioExceptionType.receiveTimeout;
@@ -113,14 +183,9 @@ class ApiClient {
     );
   }
 
-  // ---------------------------------------------------------------------------
   // Auth Endpoints
-  // ---------------------------------------------------------------------------
 
-  Future<void> login({
-    required String email,
-    required String password,
-  }) async {
+  Future<void> login({required String email, required String password}) async {
     try {
       final res = await _dio.post(
         '/auth/login',
@@ -133,6 +198,8 @@ class ApiClient {
         id: (user['id'] ?? '').toString(),
         name: (user['name'] ?? '').toString(),
         email: (user['email'] ?? email).toString(),
+        phone: user['phone']?.toString(),
+        avatarUrl: (user['avatarUrl'] ?? user['avatar_url'])?.toString(),
       );
     } on DioException catch (e) {
       throw _mapDioError(e);
@@ -160,6 +227,8 @@ class ApiClient {
         id: (user['id'] ?? '').toString(),
         name: (user['name'] ?? name).toString(),
         email: (user['email'] ?? email).toString(),
+        phone: user['phone']?.toString(),
+        avatarUrl: (user['avatarUrl'] ?? user['avatar_url'])?.toString(),
       );
     } on DioException catch (e) {
       throw _mapDioError(e);
@@ -174,6 +243,69 @@ class ApiClient {
         id: (user['id'] ?? '').toString(),
         name: (user['name'] ?? '').toString(),
         email: (user['email'] ?? '').toString(),
+        phone: user['phone']?.toString(),
+        avatarUrl: (user['avatarUrl'] ?? user['avatar_url'])?.toString(),
+      );
+    } on DioException catch (e) {
+      throw _mapDioError(e);
+    }
+  }
+
+  Future<void> updateProfile({
+    required String name,
+    required String email,
+    String? phone,
+    Uint8List? avatarBytes,
+    String? avatarFileName,
+    bool removeAvatar = false,
+    String? currentPassword,
+    String? newPassword,
+  }) async {
+    final token = AuthState.instance.token;
+    if (token == null || token.isEmpty) {
+      await AuthState.instance.updateUserProfile(
+        id: AuthState.instance.userId ?? '',
+        name: name.trim(),
+        email: email.trim(),
+        phone: phone?.trim(),
+        avatarUrl: removeAvatar ? null : AuthState.instance.userAvatarUrl,
+      );
+      return;
+    }
+
+    try {
+      final map = <String, dynamic>{
+        'name': name.trim(),
+        'email': email.trim(),
+        'phone': phone?.trim() ?? '',
+        if (removeAvatar && avatarBytes == null) 'remove_avatar': '1',
+        if (newPassword != null && newPassword.isNotEmpty) ...{
+          'current_password': currentPassword ?? '',
+          'new_password': newPassword,
+        },
+      };
+
+      if (avatarBytes != null && avatarBytes.isNotEmpty) {
+        final rawName = (avatarFileName ?? '').trim();
+        final fileName = rawName.isNotEmpty ? rawName : 'avatar.jpg';
+        map['avatar'] = MultipartFile.fromBytes(
+          avatarBytes,
+          filename: fileName,
+        );
+      }
+
+      final res = await _dio.post(
+        '/auth/profile',
+        data: FormData.fromMap(map),
+        options: Options(contentType: Headers.multipartFormDataContentType),
+      );
+      final user = res.data as Map<String, dynamic>;
+      await AuthState.instance.updateUserProfile(
+        id: (user['id'] ?? '').toString(),
+        name: (user['name'] ?? name).toString(),
+        email: (user['email'] ?? email).toString(),
+        phone: user['phone']?.toString(),
+        avatarUrl: (user['avatarUrl'] ?? user['avatar_url'])?.toString(),
       );
     } on DioException catch (e) {
       throw _mapDioError(e);
@@ -255,14 +387,14 @@ class ApiClient {
     }
   }
 
-  Future<List<CartItem>> addToCart(
-    String productId, {
-    int quantity = 1,
-  }) async {
+  Future<List<CartItem>> addToCart(String productId, {int quantity = 1}) async {
     try {
       final res = await _dio.post(
         '/cart',
-        data: {'product_id': int.tryParse(productId) ?? productId, 'quantity': quantity},
+        data: {
+          'product_id': int.tryParse(productId) ?? productId,
+          'quantity': quantity,
+        },
       );
       final list = res.data as List<dynamic>;
       return list
@@ -344,10 +476,7 @@ class ApiClient {
       final list = res.data as List<dynamic>;
       return list
           .map(
-            (e) => Order.fromJson(
-              e as Map<String, dynamic>,
-              catalog: catalog,
-            ),
+            (e) => Order.fromJson(e as Map<String, dynamic>, catalog: catalog),
           )
           .toList();
     } on DioException catch (e) {
@@ -361,10 +490,7 @@ class ApiClient {
   }) async {
     try {
       final res = await _dio.get('/orders/$id');
-      return Order.fromJson(
-        res.data as Map<String, dynamic>,
-        catalog: catalog,
-      );
+      return Order.fromJson(res.data as Map<String, dynamic>, catalog: catalog);
     } on DioException catch (e) {
       throw _mapDioError(e);
     }
@@ -378,14 +504,12 @@ class ApiClient {
     List<Product> catalog = const [],
   }) async {
     try {
-      final parsedAddressId =
-          addressId != null ? int.tryParse(addressId) : null;
+      final parsedAddressId = addressId != null
+          ? int.tryParse(addressId)
+          : null;
       final res = await _dio.post(
         '/orders',
-        data: {
-          'address': address,
-          'address_id': ?parsedAddressId,
-        },
+        data: {'address': address, 'address_id': ?parsedAddressId},
       );
       return Order.fromJson(
         res.data as Map<String, dynamic>,
@@ -480,4 +604,3 @@ class ApiClient {
     }
   }
 }
-

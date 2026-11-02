@@ -26,8 +26,7 @@ class ProductsTable
                     ->circular()
                     ->stacked()
                     ->limit(3)
-                    ->limitedRemainingText()
-                    ->getStateUsing(fn ($record) => $record->images ?: array_filter([$record->image_url])),
+                    ->limitedRemainingText(),
                 TextColumn::make('name')
                     ->searchable()
                     ->sortable(),

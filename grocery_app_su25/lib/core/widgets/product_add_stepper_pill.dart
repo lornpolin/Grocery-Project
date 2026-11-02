@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../models/product.dart';
 import '../../providers/app_providers.dart';
 import '../constants/app_colors.dart';
+import 'auth_prompt_dialog.dart';
 import 'product_stock_badge.dart';
 
 /// Animated overhanging pill button that morphs smoothly between:
@@ -72,6 +73,13 @@ class _ProductAddStepperPillState extends ConsumerState<ProductAddStepperPill>
   }
 
   Future<void> _handleAdd(Product liveProduct) async {
+    if (!ensureSignedIn(
+      context,
+      icon: Icons.add_shopping_cart_rounded,
+      message: 'Please sign in or sign up to add items to your cart.',
+    )) {
+      return;
+    }
     if (liveProduct.isOutOfStock) {
       _handleOutOfStockTap(liveProduct);
       return;

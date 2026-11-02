@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/constants/app_colors.dart';
+import '../../../core/widgets/auth_prompt_dialog.dart';
 import '../../../core/widgets/category_icon.dart';
 import '../../../core/widgets/product_add_stepper_pill.dart';
 import '../../../core/widgets/product_stock_badge.dart';
@@ -364,7 +365,17 @@ class _HomeHeader extends ConsumerWidget {
           Expanded(
             child: InkWell(
               borderRadius: BorderRadius.circular(12),
-              onTap: () => context.push('/addresses'),
+              onTap: () {
+                if (!ensureSignedIn(
+                  context,
+                  icon: Icons.location_on_outlined,
+                  message:
+                      'Please sign in or sign up to manage delivery addresses.',
+                )) {
+                  return;
+                }
+                context.push('/addresses');
+              },
               child: Row(
                 children: [
                   Container(
@@ -579,9 +590,19 @@ class _HomeSearchGridCard extends ConsumerWidget {
                           top: 8,
                           right: 8,
                           child: InkWell(
-                            onTap: () => ref
-                                .read(favoriteProvider.notifier)
-                                .toggleFavorite(product.id),
+                            onTap: () {
+                              if (!ensureSignedIn(
+                                context,
+                                icon: Icons.favorite_border_rounded,
+                                message:
+                                    'Please sign in or sign up to save favorite items.',
+                              )) {
+                                return;
+                              }
+                              ref
+                                  .read(favoriteProvider.notifier)
+                                  .toggleFavorite(product.id);
+                            },
                             child: Container(
                               padding: const EdgeInsets.all(6),
                               decoration: const BoxDecoration(
@@ -1017,6 +1038,14 @@ class ProductCard extends ConsumerWidget {
                   right: 8,
                   child: InkWell(
                     onTap: () {
+                      if (!ensureSignedIn(
+                        context,
+                        icon: Icons.favorite_border_rounded,
+                        message:
+                            'Please sign in or sign up to save favorite items.',
+                      )) {
+                        return;
+                      }
                       ref
                           .read(favoriteProvider.notifier)
                           .toggleFavorite(product.id);
@@ -1064,6 +1093,14 @@ class ProductCard extends ConsumerWidget {
                     ),
                     InkWell(
                       onTap: () async {
+                        if (!ensureSignedIn(
+                          context,
+                          icon: Icons.add_shopping_cart_rounded,
+                          message:
+                              'Please sign in or sign up to add items to your cart.',
+                        )) {
+                          return;
+                        }
                         final err = await ref
                             .read(cartProvider.notifier)
                             .addToCart(product);

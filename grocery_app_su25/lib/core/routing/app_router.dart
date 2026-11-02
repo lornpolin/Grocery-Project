@@ -11,6 +11,7 @@ import '../../features/categories/screens/categories_screen.dart';
 import '../../features/cart/screens/cart_screen.dart';
 import '../../features/checkout/screens/checkout_screen.dart';
 import '../../features/profile/screens/profile_screen.dart';
+import '../../features/profile/screens/edit_profile_screen.dart';
 import '../../features/favorites/screens/favorites_screen.dart';
 import '../../features/addresses/screens/addresses_screen.dart';
 import '../../features/product_details/screens/product_details_screen.dart';
@@ -30,11 +31,18 @@ final GoRouter appRouter = GoRouter(
   initialLocation: '/splash',
   refreshListenable: AuthState.instance,
   redirect: (context, state) {
-    final signedIn = AuthState.instance.value;
+    final signedIn = AuthState.instance.isSignedIn;
     final path = state.uri.path;
     const authPaths = ['/sign-in', '/sign-up'];
-    const openPaths = ['/splash', '/onboarding', ...authPaths];
-    if (!signedIn && !openPaths.contains(path)) return '/sign-in';
+    const protectedPaths = [
+      '/cart',
+      '/checkout',
+      '/favorites',
+      '/addresses',
+      '/profile/edit',
+      '/order-details',
+    ];
+    if (!signedIn && protectedPaths.contains(path)) return '/sign-in';
     if (signedIn && authPaths.contains(path)) return '/home';
     return null;
   },
@@ -75,6 +83,11 @@ final GoRouter appRouter = GoRouter(
       path: '/addresses',
       parentNavigatorKey: _rootNavigatorKey,
       builder: (context, state) => const AddressesScreen(),
+    ),
+    GoRoute(
+      path: '/profile/edit',
+      parentNavigatorKey: _rootNavigatorKey,
+      builder: (context, state) => const EditProfileScreen(),
     ),
     GoRoute(
       path: '/products',

@@ -48,10 +48,7 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
     } on ApiException catch (e) {
       if (e.isNetworkError) {
         // Offline fallback so local testing still works when backend isn't running.
-        await AuthState.instance.setSignedIn(
-          true,
-          email: _email.text.trim(),
-        );
+        await AuthState.instance.setSignedIn(true, email: _email.text.trim());
         if (!mounted) return;
         context.go('/home');
         return;
@@ -62,6 +59,16 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
         ..showSnackBar(SnackBar(content: Text(e.message)));
     } finally {
       if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  Future<void> _continueAsGuest() async {
+    await AuthState.instance.continueAsGuest();
+    if (!mounted) return;
+    if (context.canPop()) {
+      context.pop();
+    } else {
+      context.go('/home');
     }
   }
 
@@ -78,7 +85,7 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
             children: [
               AuthField(
                 label: 'Email Address',
-                hint: 'name@company.com',
+                hint: 'Enter your email',
                 icon: Icons.mail_outline_rounded,
                 controller: _email,
                 keyboardType: TextInputType.emailAddress,
@@ -105,7 +112,7 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
           value: _remember,
           onChanged: (v) => setState(() => _remember = v),
           label: const Text(
-            'Remember me for 30 days',
+            'Remember me',
             style: TextStyle(color: AuthColors.muted, fontSize: 15),
           ),
         ),
@@ -119,6 +126,20 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
           prompt: "Don't have an account?",
           action: 'Sign Up',
           onTap: () => context.go('/sign-up'),
+        ),
+        const SizedBox(height: 12),
+        Center(
+          child: TextButton(
+            onPressed: _continueAsGuest,
+            child: const Text(
+              'Continue as Guest',
+              style: TextStyle(
+                color: AuthColors.muted,
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
         ),
       ],
     );

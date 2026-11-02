@@ -38,7 +38,7 @@ class DatabaseSeeder extends Seeder
                 'category_id' => $cats[$cat]->id,
                 'name' => $name,
                 'description' => $desc,
-                'image_url' => "https://images.unsplash.com/{$photo}?w=500&q=80",
+                'images' => ["https://images.unsplash.com/{$photo}?w=500&q=80"],
                 'price' => $price,
                 'original_price' => $orig,
                 'unit' => $unit,
