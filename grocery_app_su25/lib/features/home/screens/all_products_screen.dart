@@ -4,7 +4,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/constants/app_colors.dart';
-import '../../../core/widgets/auth_prompt_dialog.dart';
 import '../../../core/widgets/product_add_stepper_pill.dart';
 import '../../../core/widgets/product_stock_badge.dart';
 import '../../../core/widgets/skeleton_loaders.dart';
@@ -415,19 +414,9 @@ class _AllProductGridCard extends ConsumerWidget {
                           top: 8,
                           right: 8,
                           child: InkWell(
-                            onTap: () {
-                              if (!ensureSignedIn(
-                                context,
-                                icon: Icons.favorite_border_rounded,
-                                message:
-                                    'Please sign in or sign up to save favorite items.',
-                              )) {
-                                return;
-                              }
-                              ref
-                                  .read(favoriteProvider.notifier)
-                                  .toggleFavorite(product.id);
-                            },
+                            onTap: () => ref
+                                .read(favoriteProvider.notifier)
+                                .toggleFavorite(product.id),
                             child: Container(
                               padding: const EdgeInsets.all(6),
                               decoration: const BoxDecoration(

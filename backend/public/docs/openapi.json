@@ -16,9 +16,7 @@
         "properties": {
           "id": { "type": "string", "example": "1" },
           "name": { "type": "string", "example": "Test User" },
-          "email": { "type": "string", "example": "test@example.com" },
-          "phone": { "type": "string", "nullable": true, "example": "012345678" },
-          "avatarUrl": { "type": "string", "nullable": true, "example": "http://127.0.0.1:8000/api/media/avatars/photo.jpg" }
+          "email": { "type": "string", "example": "test@example.com" }
         }
       },
       "AuthResponse": {
@@ -43,6 +41,7 @@
           "id": { "type": "string", "example": "1" },
           "name": { "type": "string", "example": "Organic Bananas" },
           "description": { "type": "string" },
+          "imageUrl": { "type": "string", "description": "Main image (first of images)" },
           "images": { "type": "array", "items": { "type": "string" }, "description": "All image URLs, main image first" },
           "price": { "type": "number", "example": 4.99 },
           "originalPrice": { "type": "number", "nullable": true },
@@ -167,65 +166,6 @@
         "summary": "Current user",
         "security": [{ "bearerAuth": [] }],
         "responses": { "200": { "description": "OK", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/User" } } } } }
-      }
-    },
-    "/auth/profile": {
-      "post": {
-        "tags": ["Auth"],
-        "summary": "Update profile info, avatar photo, or password",
-        "security": [{ "bearerAuth": [] }],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "multipart/form-data": {
-              "schema": {
-                "type": "object",
-                "required": ["name", "email"],
-                "properties": {
-                  "name": { "type": "string", "example": "Test User" },
-                  "email": { "type": "string", "example": "test@example.com" },
-                  "phone": { "type": "string", "example": "012345678" },
-                  "avatar": { "type": "string", "format": "binary" },
-                  "remove_avatar": { "type": "boolean" },
-                  "current_password": { "type": "string" },
-                  "new_password": { "type": "string", "minLength": 6 }
-                }
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": { "description": "OK", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/User" } } } },
-          "422": { "description": "Validation error" }
-        }
-      },
-      "put": {
-        "tags": ["Auth"],
-        "summary": "Update profile info or password (JSON)",
-        "security": [{ "bearerAuth": [] }],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "required": ["name", "email"],
-                "properties": {
-                  "name": { "type": "string", "example": "Test User" },
-                  "email": { "type": "string", "example": "test@example.com" },
-                  "phone": { "type": "string", "nullable": true, "example": "012345678" },
-                  "remove_avatar": { "type": "boolean" },
-                  "current_password": { "type": "string" },
-                  "new_password": { "type": "string", "minLength": 6 }
-                }
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": { "description": "OK", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/User" } } } },
-          "422": { "description": "Validation error" }
-        }
       }
     },
     "/categories": {

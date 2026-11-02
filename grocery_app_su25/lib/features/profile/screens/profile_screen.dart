@@ -3,8 +3,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/auth/auth_state.dart';
 import '../../../core/constants/app_colors.dart';
-import '../../../core/widgets/auth_prompt_dialog.dart';
-import '../../../core/widgets/user_profile_avatar.dart';
 import '../../../providers/app_providers.dart';
 import '../../../services/api_client.dart';
 
@@ -27,28 +25,10 @@ class _SettingItem {
   });
 }
 
-class ProfileScreen extends ConsumerStatefulWidget {
+class ProfileScreen extends ConsumerWidget {
   const ProfileScreen({super.key});
 
-  @override
-  ConsumerState<ProfileScreen> createState() => _ProfileScreenState();
-}
-
-class _ProfileScreenState extends ConsumerState<ProfileScreen> {
-  @override
-  void initState() {
-    super.initState();
-    Future.microtask(() async {
-      final token = AuthState.instance.token;
-      if (AuthState.instance.isSignedIn && token != null && token.isNotEmpty) {
-        try {
-          await ApiClient.instance.fetchMe();
-        } catch (_) {}
-      }
-    });
-  }
-
-  Future<void> _handleLogout(BuildContext context) async {
+  Future<void> _handleLogout(BuildContext context, WidgetRef ref) async {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => Dialog(
@@ -151,9 +131,6 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
 
     if (confirmed != true) return;
 
-    await ref.read(cartProvider.notifier).clearLocal();
-    await ref.read(favoriteProvider.notifier).clear();
-    ref.read(ordersProvider.notifier).clear();
     await ref.read(addressesProvider.notifier).clear();
     await ApiClient.instance.logout();
     if (context.mounted) {
@@ -162,167 +139,141 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   }
 
   @override
-  Widget build(BuildContext context) {
-    return ListenableBuilder(
-      listenable: AuthState.instance,
-      builder: (context, _) {
-        final signedIn = AuthState.instance.isSignedIn;
+  Widget build(BuildContext context, WidgetRef ref) {
+    final items = <_SettingItem>[
+      _SettingItem(
+        icon: Icons.shopping_basket_outlined,
+        title: 'My Orders',
+        onTap: () => context.go('/orders'),
+      ),
+      _SettingItem(
+        icon: Icons.favorite_border_rounded,
+        title: 'Favorites',
+        onTap: () => context.push('/favorites'),
+      ),
+      _SettingItem(
+        icon: Icons.location_on_outlined,
+        title: 'Saved Addresses',
+        onTap: () => context.push('/addresses'),
+      ),
+      const _SettingItem(
+        icon: Icons.credit_card_outlined,
+        title: 'Payment Methods',
+      ),
+      const _SettingItem(
+        icon: Icons.help_outline_rounded,
+        title: 'Help Center',
+      ),
+    ];
 
-        final items = <_SettingItem>[
-          _SettingItem(
-            icon: Icons.person_outline_rounded,
-            title: 'Edit Profile',
-            onTap: () {
-              if (!ensureSignedIn(
-                context,
-                icon: Icons.person_outline_rounded,
-                message:
-                    'Please sign in or sign up to edit your profile information.',
-              )) {
-                return;
-              }
-              context.push('/profile/edit');
-            },
-          ),
-          _SettingItem(
-            icon: Icons.shopping_basket_outlined,
-            title: 'My Orders',
-            onTap: () => context.go('/orders'),
-          ),
-          _SettingItem(
-            icon: Icons.favorite_border_rounded,
-            title: 'Favorites',
-            onTap: () {
-              if (!ensureSignedIn(
-                context,
-                icon: Icons.favorite_border_rounded,
-                message: 'Please sign in or sign up to view favorite items.',
-              )) {
-                return;
-              }
-              context.push('/favorites');
-            },
-          ),
-          _SettingItem(
-            icon: Icons.location_on_outlined,
-            title: 'Saved Addresses',
-            onTap: () {
-              if (!ensureSignedIn(
-                context,
-                icon: Icons.location_on_outlined,
-                message:
-                    'Please sign in or sign up to manage your saved addresses.',
-              )) {
-                return;
-              }
-              context.push('/addresses');
-            },
-          ),
-          const _SettingItem(
-            icon: Icons.credit_card_outlined,
-            title: 'Payment Methods',
-          ),
-          const _SettingItem(
-            icon: Icons.help_outline_rounded,
-            title: 'Help Center',
-          ),
-        ];
-
-        return Scaffold(
-          backgroundColor: _profileBg,
-          body: SafeArea(
-            child: ListView(
-              padding: const EdgeInsets.fromLTRB(16, 16, 16, 110),
-              children: [
-                if (signedIn)
-                  _ProfileHeaderCard(
-                    onEditTap: () => context.push('/profile/edit'),
-                  )
-                else
-                  const _GuestProfileHeaderCard(),
-                const SizedBox(height: 24),
-                const Padding(
-                  padding: EdgeInsets.only(left: 4, bottom: 12),
-                  child: Text(
-                    'Account Settings',
-                    style: TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w600,
-                      color: _textDark,
-                    ),
-                  ),
+    return Scaffold(
+      backgroundColor: _profileBg,
+      body: SafeArea(
+        child: ListView(
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 110),
+          children: [
+            const _ProfileHeaderCard(),
+            const SizedBox(height: 24),
+            const Padding(
+              padding: EdgeInsets.only(left: 4, bottom: 12),
+              child: Text(
+                'Account Settings',
+                style: TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w600,
+                  color: _textDark,
                 ),
-                for (int i = 0; i < items.length; i++) ...[
-                  _SettingTileCard(item: items[i]),
-                  if (i < items.length - 1) const SizedBox(height: 12),
-                ],
-                if (signedIn) ...[
-                  const SizedBox(height: 24),
-                  _LogoutButton(onTap: () => _handleLogout(context)),
-                ],
-                const SizedBox(height: 20),
-                const Center(
-                  child: Text(
-                    'Version 2.4.0',
-                    style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w500,
-                      letterSpacing: 0.4,
-                      color: Color(0xFF9E9E9E),
-                    ),
-                  ),
-                ),
-              ],
+              ),
             ),
-          ),
-        );
-      },
+            for (int i = 0; i < items.length; i++) ...[
+              _SettingTileCard(item: items[i]),
+              if (i < items.length - 1) const SizedBox(height: 12),
+            ],
+            const SizedBox(height: 24),
+            _LogoutButton(onTap: () => _handleLogout(context, ref)),
+            const SizedBox(height: 20),
+            const Center(
+              child: Text(
+                'Version 2.4.0',
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w500,
+                  letterSpacing: 0.4,
+                  color: Color(0xFF9E9E9E),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
 
-class _GuestProfileHeaderCard extends StatelessWidget {
-  const _GuestProfileHeaderCard();
+class _ProfileHeaderCard extends StatelessWidget {
+  const _ProfileHeaderCard();
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(18),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.03),
-            blurRadius: 12,
-            offset: const Offset(0, 4),
+    return ValueListenableBuilder<bool>(
+      valueListenable: AuthState.instance,
+      builder: (context, _, _) {
+        final name = AuthState.instance.userName;
+        final email = AuthState.instance.userEmail;
+        return Container(
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(18),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.03),
+                blurRadius: 12,
+                offset: const Offset(0, 4),
+              ),
+            ],
           ),
-        ],
-      ),
-      child: Column(
-        children: [
-          const Row(
+          child: Row(
             children: [
-              UserProfileAvatar(size: 62, borderWidth: 1.8),
-              SizedBox(width: 16),
+              Container(
+                width: 64,
+                height: 64,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(color: AppColors.primary, width: 1.8),
+                ),
+                child: ClipOval(
+                  child: Image.asset(
+                    'assets/images/profile_avatar.png',
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, _, _) => const Icon(
+                      Icons.person,
+                      size: 36,
+                      color: AppColors.primary,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 16),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Welcome, Guest',
-                      style: TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.w800,
+                      name,
+                      style: const TextStyle(
+                        fontSize: 22,
+                        fontWeight: FontWeight.w700,
                         color: _textDark,
                       ),
                     ),
-                    SizedBox(height: 4),
+                    const SizedBox(height: 4),
                     Text(
-                      'Sign in or create an account to add items to your cart and save favorites.',
-                      style: TextStyle(
+                      email,
+                      style: const TextStyle(
                         fontSize: 13,
-                        height: 1.4,
+                        fontWeight: FontWeight.w500,
+                        letterSpacing: 0.3,
                         color: _textMuted,
                       ),
                     ),
@@ -331,199 +282,8 @@ class _GuestProfileHeaderCard extends StatelessWidget {
               ),
             ],
           ),
-          const SizedBox(height: 18),
-          Row(
-            children: [
-              Expanded(
-                child: SizedBox(
-                  height: 44,
-                  child: ElevatedButton(
-                    onPressed: () => context.push('/sign-in'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.primary,
-                      foregroundColor: Colors.white,
-                      elevation: 0,
-                      padding: EdgeInsets.zero,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(22),
-                      ),
-                    ),
-                    child: const Text(
-                      'Sign In',
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: SizedBox(
-                  height: 44,
-                  child: OutlinedButton(
-                    onPressed: () => context.push('/sign-up'),
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: AppColors.primary,
-                      side: const BorderSide(
-                        color: AppColors.primary,
-                        width: 1.4,
-                      ),
-                      padding: EdgeInsets.zero,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(22),
-                      ),
-                    ),
-                    child: const Text(
-                      'Sign Up',
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _ProfileHeaderCard extends StatelessWidget {
-  final VoidCallback onEditTap;
-
-  const _ProfileHeaderCard({required this.onEditTap});
-
-  @override
-  Widget build(BuildContext context) {
-    final name = AuthState.instance.userName;
-    final email = AuthState.instance.userEmail;
-    final phone = AuthState.instance.userPhone;
-    final avatarUrl = AuthState.instance.userAvatarUrl;
-
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(18),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.03),
-            blurRadius: 12,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          borderRadius: BorderRadius.circular(18),
-          onTap: onEditTap,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(
-              horizontal: 18,
-              vertical: 18,
-            ),
-            child: Row(
-              children: [
-                Stack(
-                  clipBehavior: Clip.none,
-                  children: [
-                    UserProfileAvatar(
-                      avatarUrl: avatarUrl,
-                      size: 64,
-                      borderWidth: 1.8,
-                    ),
-                    Positioned(
-                      right: -2,
-                      bottom: -2,
-                      child: Container(
-                        width: 24,
-                        height: 24,
-                        decoration: BoxDecoration(
-                          color: AppColors.primary,
-                          shape: BoxShape.circle,
-                          border: Border.all(
-                            color: Colors.white,
-                            width: 2,
-                          ),
-                        ),
-                        child: const Icon(
-                          Icons.camera_alt_rounded,
-                          size: 12,
-                          color: Colors.white,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        name,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          fontSize: 21,
-                          fontWeight: FontWeight.w700,
-                          color: _textDark,
-                        ),
-                      ),
-                      if (email.isNotEmpty) ...[
-                        const SizedBox(height: 3),
-                        Text(
-                          email,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w500,
-                            letterSpacing: 0.2,
-                            color: _textMuted,
-                          ),
-                        ),
-                      ],
-                      if (phone != null && phone.isNotEmpty) ...[
-                        const SizedBox(height: 3),
-                        Text(
-                          phone,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            fontSize: 12.5,
-                            fontWeight: FontWeight.w500,
-                            color: _textMuted,
-                          ),
-                        ),
-                      ],
-                    ],
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Container(
-                  width: 38,
-                  height: 38,
-                  decoration: const BoxDecoration(
-                    color: _iconCircleBg,
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Icon(
-                    Icons.edit_outlined,
-                    size: 19,
-                    color: AppColors.primary,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
+        );
+      },
     );
   }
 }

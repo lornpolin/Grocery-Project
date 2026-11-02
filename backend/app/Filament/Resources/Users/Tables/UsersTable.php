@@ -6,7 +6,6 @@ use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
 use Filament\Tables\Columns\IconColumn;
-use Filament\Tables\Columns\ImageColumn;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 
@@ -17,17 +16,10 @@ class UsersTable
         return $table
             ->modifyQueryUsing(fn ($query) => $query->withCount('orders')->withSum('orders as spent', 'total'))
             ->columns([
-                ImageColumn::make('avatar')
-                    ->label('')
-                    ->disk('public')
-                    ->circular(),
                 TextColumn::make('name')
                     ->searchable()
                     ->sortable(),
                 TextColumn::make('email')
-                    ->searchable(),
-                TextColumn::make('phone')
-                    ->placeholder('-')
                     ->searchable(),
                 TextColumn::make('orders_count')
                     ->label('Orders')

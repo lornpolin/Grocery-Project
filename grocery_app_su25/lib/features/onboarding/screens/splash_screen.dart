@@ -20,14 +20,10 @@ class _SplashScreenState extends State<SplashScreen>
     duration: const Duration(milliseconds: 1200),
   )..forward();
 
-  late final Animation<double> _scale = CurvedAnimation(
-    parent: _controller,
-    curve: Curves.elasticOut,
-  );
+  late final Animation<double> _scale =
+      CurvedAnimation(parent: _controller, curve: Curves.elasticOut);
   late final Animation<double> _fade = CurvedAnimation(
-    parent: _controller,
-    curve: const Interval(0.4, 1, curve: Curves.easeIn),
-  );
+      parent: _controller, curve: const Interval(0.4, 1, curve: Curves.easeIn));
 
   @override
   void initState() {
@@ -41,15 +37,7 @@ class _SplashScreenState extends State<SplashScreen>
     await Future.delayed(const Duration(milliseconds: 2400));
     if (!mounted) return;
     final seen = prefs.getBool(kOnboardingSeenKey) ?? false;
-    if (!seen) {
-      context.go('/onboarding');
-      return;
-    }
-    if (AuthState.instance.isSignedIn || AuthState.instance.isGuestBrowsing) {
-      context.go('/home');
-    } else {
-      context.go('/sign-in');
-    }
+    context.go(seen ? '/home' : '/onboarding');
   }
 
   @override
@@ -74,12 +62,29 @@ class _SplashScreenState extends State<SplashScreen>
                   children: const [
                     BrandTitle(),
                     SizedBox(height: 14),
+                    Text(
+                      'Fresh groceries at your\ndoorstep',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                          fontSize: 18,
+                          height: 1.4,
+                          color: BrandColors.slate,
+                          fontWeight: FontWeight.w500),
+                    ),
                     SizedBox(height: 28),
+                    DotsIndicator(count: 3, index: 0),
                   ],
                 ),
               ),
               const Spacer(flex: 5),
-
+              const Text(
+                'VERSION 1.0.0',
+                style: TextStyle(
+                    fontSize: 12,
+                    letterSpacing: 2,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFF94A3B8)),
+              ),
               const SizedBox(height: 90),
             ],
           ),

@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import '../../../core/auth/auth_state.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/widgets/product_stock_badge.dart';
 import '../../../models/order.dart';
@@ -62,14 +61,8 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
           ),
         ),
       ),
-      body: ValueListenableBuilder<bool>(
-        valueListenable: AuthState.instance,
-        builder: (context, signedIn, _) {
-          if (!signedIn) {
-            return const _GuestOrdersPrompt();
-          }
-          if (orders.isEmpty) {
-            return RefreshIndicator(
+      body: orders.isEmpty
+          ? RefreshIndicator(
               color: AppColors.primary,
               onRefresh: () => ref.read(ordersProvider.notifier).refresh(),
               child: ListView(
@@ -79,48 +72,47 @@ class _OrdersScreenState extends ConsumerState<OrdersScreen> {
                   _EmptyOrders(),
                 ],
               ),
-            );
-          }
-          return Column(
-            children: [
-              _FilterBar(
-                selected: _filter,
-                orders: orders,
-                matches: _matches,
-                onChanged: (next) => setState(() => _filter = next),
-              ),
-              Expanded(
-                child: RefreshIndicator(
-                  color: AppColors.primary,
-                  onRefresh: () => ref.read(ordersProvider.notifier).refresh(),
-                  child: filtered.isEmpty
-                      ? ListView(
-                          physics: const AlwaysScrollableScrollPhysics(),
-                          children: [
-                            const SizedBox(height: 90),
-                            _EmptyFilteredOrders(
-                              onReset: () =>
-                                  setState(() => _filter = _OrderFilter.all),
-                            ),
-                          ],
-                        )
-                      : ListView.separated(
-                          physics: const AlwaysScrollableScrollPhysics(),
-                          padding: const EdgeInsets.fromLTRB(16, 8, 16, 110),
-                          itemCount: filtered.length,
-                          separatorBuilder: (_, _) =>
-                              const SizedBox(height: 12),
-                          itemBuilder: (_, i) => _OrderCard(
-                            order: filtered[i],
-                            catalog: catalog,
-                          ),
-                        ),
+            )
+          : Column(
+              children: [
+                _FilterBar(
+                  selected: _filter,
+                  orders: orders,
+                  matches: _matches,
+                  onChanged: (next) => setState(() => _filter = next),
                 ),
-              ),
-            ],
-          );
-        },
-      ),
+                Expanded(
+                  child: RefreshIndicator(
+                    color: AppColors.primary,
+                    onRefresh: () =>
+                        ref.read(ordersProvider.notifier).refresh(),
+                    child: filtered.isEmpty
+                        ? ListView(
+                            physics: const AlwaysScrollableScrollPhysics(),
+                            children: [
+                              const SizedBox(height: 90),
+                              _EmptyFilteredOrders(
+                                onReset: () =>
+                                    setState(() => _filter = _OrderFilter.all),
+                              ),
+                            ],
+                          )
+                        : ListView.separated(
+                            physics: const AlwaysScrollableScrollPhysics(),
+                            padding:
+                                const EdgeInsets.fromLTRB(16, 8, 16, 110),
+                            itemCount: filtered.length,
+                            separatorBuilder: (_, _) =>
+                                const SizedBox(height: 12),
+                            itemBuilder: (_, i) => _OrderCard(
+                              order: filtered[i],
+                              catalog: catalog,
+                            ),
+                          ),
+                  ),
+                ),
+              ],
+            ),
     );
   }
 }
@@ -612,105 +604,6 @@ class _EmptyFilteredOrders extends StatelessWidget {
                   color: AppColors.primary,
                 ),
               ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _GuestOrdersPrompt extends StatelessWidget {
-  const _GuestOrdersPrompt();
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(32, 0, 32, 96),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 104,
-              height: 104,
-              decoration: const BoxDecoration(
-                color: AppColors.primaryLight,
-                shape: BoxShape.circle,
-              ),
-              child: const Icon(
-                Icons.lock_person_rounded,
-                size: 48,
-                color: AppColors.primary,
-              ),
-            ),
-            const SizedBox(height: 22),
-            const Text(
-              'Sign in to view orders',
-              style: TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.w700,
-                color: _ordersTitle,
-              ),
-            ),
-            const SizedBox(height: 8),
-            const Text(
-              'Create an account or sign in to place orders and track your deliveries.',
-              textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 14, height: 1.5, color: _ordersMuted),
-            ),
-            const SizedBox(height: 24),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                SizedBox(
-                  width: 126,
-                  height: 46,
-                  child: ElevatedButton(
-                    onPressed: () => context.push('/sign-in'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.primary,
-                      foregroundColor: Colors.white,
-                      elevation: 0,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(24),
-                      ),
-                    ),
-                    child: const Text(
-                      'Sign In',
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                SizedBox(
-                  width: 126,
-                  height: 46,
-                  child: OutlinedButton(
-                    onPressed: () => context.push('/sign-up'),
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: AppColors.primary,
-                      side: const BorderSide(
-                        color: AppColors.primary,
-                        width: 1.4,
-                      ),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(24),
-                      ),
-                    ),
-                    child: const Text(
-                      'Sign Up',
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ),
-                ),
-              ],
             ),
           ],
         ),

@@ -76,16 +76,6 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
     }
   }
 
-  Future<void> _continueAsGuest() async {
-    await AuthState.instance.continueAsGuest();
-    if (!mounted) return;
-    if (context.canPop()) {
-      context.pop();
-    } else {
-      context.go('/home');
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     const body = TextStyle(color: AuthColors.muted, fontSize: 14, height: 1.4);
@@ -107,16 +97,17 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
             children: [
               AuthField(
                 label: 'Full Name',
-                hint: 'Lorn Polin',
+                hint: 'John Doe',
                 icon: Icons.person_rounded,
                 controller: _name,
-                validator: (v) =>
-                    (v == null || v.trim().isEmpty) ? 'Enter your name' : null,
+                validator: (v) => (v == null || v.trim().isEmpty)
+                    ? 'Enter your name'
+                    : null,
               ),
               const SizedBox(height: 20),
               AuthField(
                 label: 'Email Address',
-                hint: 'Enter your email',
+                hint: 'name@company.com',
                 icon: Icons.mail_outline_rounded,
                 controller: _email,
                 keyboardType: TextInputType.emailAddress,
@@ -165,20 +156,6 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
           prompt: 'Already have an account?',
           action: 'Sign In',
           onTap: () => context.go('/sign-in'),
-        ),
-        const SizedBox(height: 12),
-        Center(
-          child: TextButton(
-            onPressed: _continueAsGuest,
-            child: const Text(
-              'Continue as Guest',
-              style: TextStyle(
-                color: AuthColors.muted,
-                fontSize: 14,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ),
         ),
       ],
     );

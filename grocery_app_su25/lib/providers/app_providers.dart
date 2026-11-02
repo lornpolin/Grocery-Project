@@ -89,14 +89,7 @@ class CartNotifier extends StateNotifier<List<CartItem>> {
   final Ref _ref;
 
   CartNotifier(this._ref) : super(const []) {
-    AuthState.instance.addListener(_load);
     _load();
-  }
-
-  @override
-  void dispose() {
-    AuthState.instance.removeListener(_load);
-    super.dispose();
   }
 
   bool get _hasToken =>
@@ -112,13 +105,6 @@ class CartNotifier extends StateNotifier<List<CartItem>> {
   }
 
   Future<void> _load() async {
-    if (!AuthState.instance.isSignedIn) {
-      await AuthState.instance.load();
-    }
-    if (!AuthState.instance.isSignedIn) {
-      state = const [];
-      return;
-    }
     if (_hasToken) {
       try {
         final remoteCart = await ApiClient.instance.fetchCart();
@@ -128,12 +114,6 @@ class CartNotifier extends StateNotifier<List<CartItem>> {
       } catch (_) {}
     }
     await _loadLocal();
-  }
-
-  Future<void> clearLocal() async {
-    state = const [];
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.remove(_kCartKey);
   }
 
   Future<void> _loadLocal() async {
@@ -166,9 +146,6 @@ class CartNotifier extends StateNotifier<List<CartItem>> {
   /// Adds [quantity] of [product] to the cart.
   /// Returns `null` on success, or an error message if out of stock / exceeds stock.
   Future<String?> addToCart(Product product, {int quantity = 1}) async {
-    if (!AuthState.instance.isSignedIn) {
-      return 'Please sign in or sign up to add items to your cart';
-    }
     final liveProduct = _findCatalogProduct(product.id) ?? product;
     if (liveProduct.isOutOfStock) {
       _ref.read(productsProvider.notifier).refreshProduct(liveProduct.id);
@@ -324,14 +301,7 @@ final cartTotalProvider = Provider<double>((ref) {
 
 class FavoriteNotifier extends StateNotifier<List<String>> {
   FavoriteNotifier() : super(const []) {
-    AuthState.instance.addListener(_load);
     _load();
-  }
-
-  @override
-  void dispose() {
-    AuthState.instance.removeListener(_load);
-    super.dispose();
   }
 
   bool get _hasToken =>
@@ -340,13 +310,6 @@ class FavoriteNotifier extends StateNotifier<List<String>> {
   Future<void> refresh() => _load();
 
   Future<void> _load() async {
-    if (!AuthState.instance.isSignedIn) {
-      await AuthState.instance.load();
-    }
-    if (!AuthState.instance.isSignedIn) {
-      state = const [];
-      return;
-    }
     final prefs = await SharedPreferences.getInstance();
     final saved = prefs.getStringList(_kFavoritesKey) ?? const [];
     state = {...saved, ...state}.toList();
@@ -360,14 +323,7 @@ class FavoriteNotifier extends StateNotifier<List<String>> {
     }
   }
 
-  Future<void> clear() async {
-    state = const [];
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.remove(_kFavoritesKey);
-  }
-
   void mergeRemoteFavorites(List<String> ids) {
-    if (!AuthState.instance.isSignedIn) return;
     state = {...state, ...ids}.toList();
     _save();
   }
@@ -378,7 +334,6 @@ class FavoriteNotifier extends StateNotifier<List<String>> {
   }
 
   Future<void> toggleFavorite(String productId) async {
-    if (!AuthState.instance.isSignedIn) return;
     if (state.contains(productId)) {
       state = state.where((id) => id != productId).toList();
     } else {
@@ -416,29 +371,14 @@ class OrdersNotifier extends StateNotifier<List<Order>> {
   final Ref _ref;
 
   OrdersNotifier(this._ref) : super(const []) {
-    AuthState.instance.addListener(refresh);
     refresh();
-  }
-
-  @override
-  void dispose() {
-    AuthState.instance.removeListener(refresh);
-    super.dispose();
   }
 
   bool get _hasToken =>
       AuthState.instance.token != null && AuthState.instance.token!.isNotEmpty;
 
   Future<void> refresh() async {
-    if (!AuthState.instance.isSignedIn) {
-      await AuthState.instance.load();
-    }
-    if (!AuthState.instance.isSignedIn || !_hasToken) {
-      if (!AuthState.instance.isSignedIn) {
-        state = const [];
-      }
-      return;
-    }
+    if (!_hasToken) return;
     try {
       final catalog = _ref.read(productsProvider);
       final remoteOrders = await ApiClient.instance.fetchOrders(
@@ -446,10 +386,6 @@ class OrdersNotifier extends StateNotifier<List<Order>> {
       );
       state = remoteOrders;
     } catch (_) {}
-  }
-
-  void clear() {
-    state = const [];
   }
 
   Future<Order?> refreshOrder(String id) async {
@@ -558,14 +494,7 @@ class AddressesNotifier extends StateNotifier<List<SavedAddress>> {
   final Ref _ref;
 
   AddressesNotifier(this._ref) : super(const []) {
-    AuthState.instance.addListener(_load);
     _load();
-  }
-
-  @override
-  void dispose() {
-    AuthState.instance.removeListener(_load);
-    super.dispose();
   }
 
   bool get _hasToken =>
@@ -580,13 +509,6 @@ class AddressesNotifier extends StateNotifier<List<SavedAddress>> {
   }
 
   Future<void> _load() async {
-    if (!AuthState.instance.isSignedIn) {
-      await AuthState.instance.load();
-    }
-    if (!AuthState.instance.isSignedIn) {
-      state = const [];
-      return;
-    }
     if (_hasToken) {
       try {
         final remote = await ApiClient.instance.fetchAddresses();

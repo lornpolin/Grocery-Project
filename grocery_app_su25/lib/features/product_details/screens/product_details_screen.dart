@@ -4,7 +4,6 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/constants/app_colors.dart';
-import '../../../core/widgets/auth_prompt_dialog.dart';
 import '../../../core/widgets/product_stock_badge.dart';
 import '../../../models/product.dart';
 import '../../../providers/app_providers.dart';
@@ -14,6 +13,7 @@ const _detailBg = Color(0xFFF8F9FA);
 const _detailTitle = Color(0xFF0F172A);
 const _detailBody = Color(0xFF475569);
 const _detailMuted = Color(0xFF64748B);
+const _detailSoftBlue = Color(0xFFEAF3FC);
 
 class ProductDetailsScreen extends ConsumerStatefulWidget {
   final Product product;
@@ -125,14 +125,6 @@ class _ProductDetailsScreenState extends ConsumerState<ProductDetailsScreen> {
             padding: const EdgeInsets.only(right: 12),
             child: IconButton(
               onPressed: () {
-                if (!ensureSignedIn(
-                  context,
-                  icon: Icons.favorite_border_rounded,
-                  message:
-                      'Please sign in or sign up to save favorite items.',
-                )) {
-                  return;
-                }
                 ref.read(favoriteProvider.notifier).toggleFavorite(product.id);
               },
               icon: Icon(
@@ -359,14 +351,6 @@ class _ProductDetailsScreenState extends ConsumerState<ProductDetailsScreen> {
                       height: 50,
                       child: ElevatedButton(
                         onPressed: () async {
-                          if (!ensureSignedIn(
-                            context,
-                            icon: Icons.add_shopping_cart_rounded,
-                            message:
-                                'Please sign in or sign up to add items to your cart.',
-                          )) {
-                            return;
-                          }
                           if (isOutOfStock) {
                             HapticFeedback.heavyImpact();
                             showStockAlertMessage(
@@ -615,7 +599,7 @@ class _HeroWithSummaryCard extends StatelessWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          product.name,
+                          '${product.name}',
                           style: const TextStyle(
                             fontSize: 21,
                             fontWeight: FontWeight.w800,

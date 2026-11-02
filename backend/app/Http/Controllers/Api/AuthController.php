@@ -7,8 +7,6 @@ use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
-use Illuminate\Support\Facades\Storage;
-use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Laravel\Sanctum\PersonalAccessToken;
 
@@ -77,60 +75,8 @@ class AuthController extends Controller
         return response()->json($this->userData($request->user()));
     }
 
-    public function updateProfile(Request $request): JsonResponse
-    {
-        /** @var User $user */
-        $user = $request->user();
-
-        $data = $request->validate([
-            'name' => ['required', 'string', 'max:255'],
-            'email' => [
-                'required',
-                'email',
-                'max:255',
-                Rule::unique('users', 'email')->ignore($user->id),
-            ],
-            'phone' => ['nullable', 'string', 'max:50'],
-            'avatar' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp,gif', 'max:5120'],
-            'remove_avatar' => ['nullable', 'boolean'],
-            'current_password' => ['nullable', 'required_with:new_password', 'string'],
-            'new_password' => ['nullable', 'string', 'min:6'],
-        ]);
-
-        if ($request->hasFile('avatar')) {
-            if ($user->avatar && ! str_starts_with($user->avatar, 'http')) {
-                Storage::disk('public')->delete($user->avatar);
-            }
-            $user->avatar = $request->file('avatar')->store('avatars', 'public');
-        } elseif ($request->boolean('remove_avatar')) {
-            if ($user->avatar && ! str_starts_with($user->avatar, 'http')) {
-                Storage::disk('public')->delete($user->avatar);
-            }
-            $user->avatar = null;
-        }
-
-        if (! empty($data['new_password'])) {
-            if (! Hash::check($data['current_password'] ?? '', $user->password)) {
-                throw ValidationException::withMessages([
-                    'current_password' => ['Your current password is incorrect.'],
-                ]);
-            }
-            $user->password = $data['new_password'];
-        }
-
-        $user->name = $data['name'];
-        $user->email = $data['email'];
-        if ($request->has('phone')) {
-            $phone = trim((string) ($data['phone'] ?? ''));
-            $user->phone = $phone !== '' ? $phone : null;
-        }
-        $user->save();
-
-        return response()->json($this->userData($user));
-    }
-
     /**
-     * @return array{token: string, expiresAt: string, user: array{id: string, name: string, email: string, phone: ?string, avatarUrl: ?string}}
+     * @return array{token: string, expiresAt: string, user: array{id: string, name: string, email: string}}
      */
     private function payload(User $user): array
     {
@@ -149,16 +95,10 @@ class AuthController extends Controller
     }
 
     /**
-     * @return array{id: string, name: string, email: string, phone: ?string, avatarUrl: ?string}
+     * @return array{id: string, name: string, email: string}
      */
     private function userData(User $user): array
     {
-        return [
-            'id' => (string) $user->id,
-            'name' => $user->name,
-            'email' => $user->email,
-            'phone' => $user->phone,
-            'avatarUrl' => $user->avatarUrl(),
-        ];
+        return ['id' => (string) $user->id, 'name' => $user->name, 'email' => $user->email];
     }
 }

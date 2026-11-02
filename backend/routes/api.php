@@ -28,8 +28,6 @@ Route::get('/products/{product}', [CatalogController::class, 'product']);
 Route::middleware('auth:sanctum')->group(function () {
     Route::post('/auth/logout', [AuthController::class, 'logout']);
     Route::get('/auth/me', [AuthController::class, 'me']);
-    Route::post('/auth/profile', [AuthController::class, 'updateProfile']);
-    Route::put('/auth/profile', [AuthController::class, 'updateProfile']);
 
     Route::get('/cart', [CartController::class, 'index']);
     Route::post('/cart', [CartController::class, 'store']);

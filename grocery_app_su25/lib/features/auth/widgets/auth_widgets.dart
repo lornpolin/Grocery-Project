@@ -16,13 +16,11 @@ class AuthCard extends StatelessWidget {
   final String title;
   final String subtitle;
   final List<Widget> children;
-
-  const AuthCard({
-    super.key,
-    required this.title,
-    required this.subtitle,
-    required this.children,
-  });
+  const AuthCard(
+      {super.key,
+      required this.title,
+      required this.subtitle,
+      required this.children});
 
   @override
   Widget build(BuildContext context) {

@@ -4,7 +4,6 @@ import 'package:flutter_svg/flutter_svg.dart';
 import 'package:go_router/go_router.dart';
 import '../../providers/app_providers.dart';
 import '../constants/app_colors.dart';
-import '../widgets/auth_prompt_dialog.dart';
 
 const _navAccent = AppColors.primary;
 const _navInactive = Color(0xFF75777D);
@@ -89,17 +88,7 @@ class MainShell extends ConsumerWidget {
             Positioned(
               top: 0,
               child: GestureDetector(
-                onTap: () {
-                  if (!ensureSignedIn(
-                    context,
-                    icon: Icons.shopping_basket_outlined,
-                    message:
-                        'Please sign in or sign up to view your cart and place orders.',
-                  )) {
-                    return;
-                  }
-                  context.push('/cart');
-                },
+                onTap: () => context.push('/cart'),
                 child: Stack(
                   clipBehavior: Clip.none,
                   children: [

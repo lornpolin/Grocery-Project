@@ -21,7 +21,7 @@ class CartAndOrderStockValidationTest extends TestCase
             'category_id' => $category->id,
             'name' => $name,
             'description' => 'Fresh fruit',
-            'images' => ['https://example.com/banana.jpg'],
+            'image_url' => 'https://example.com/banana.jpg',
             'price' => 4.99,
             'unit' => '1 kg',
             'stock_quantity' => $stock,
@@ -88,3 +88,4 @@ class CartAndOrderStockValidationTest extends TestCase
         $this->assertSame(5, $first->fresh()->stock_quantity);
     }
 }
+

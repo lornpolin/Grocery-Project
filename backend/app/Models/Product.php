@@ -10,14 +10,24 @@ use Illuminate\Support\Facades\Storage;
 class Product extends Model
 {
     protected $fillable = [
-        'category_id', 'name', 'description', 'images',
+        'category_id', 'name', 'description', 'images', 'image_url',
         'price', 'original_price', 'unit', 'stock_quantity',
     ];
 
     protected static function booted(): void
     {
+        static::saving(function (Product $product) {
+            if (! empty($product->images)) {
+                $first = array_values($product->images)[0];
+                $product->image_url = url('api/media/'.ltrim($first, '/'));
+            }
+        });
+
         static::saved(function (Product $product) {
             $paths = array_values(array_filter($product->images ?? []));
+            if (! $paths && $product->image_url) {
+                $paths = [$product->image_url];
+            }
 
             $product->productImages()->delete();
             foreach ($paths as $index => $path) {
@@ -32,9 +42,7 @@ class Product extends Model
         // Remove uploaded files together with the product.
         static::deleting(function (Product $product) {
             foreach ($product->images ?? [] as $path) {
-                if (! str_starts_with($path, 'http://') && ! str_starts_with($path, 'https://')) {
-                    Storage::disk('public')->delete($path);
-                }
+                Storage::disk('public')->delete($path);
             }
         });
     }
@@ -52,17 +60,20 @@ class Product extends Model
     /**
      * Absolute image URLs. Built from the current request host so the same
      * response works for localhost, LAN IPs and the Android emulator (10.0.2.2).
-     *
-     * @return list<string>
+     * Falls back to the legacy image_url for products without uploads.
      */
     public function imageUrls(): array
     {
-        return collect($this->images ?? [])
-            ->map(fn ($path) => str_starts_with($path, 'http://') || str_starts_with($path, 'https://')
-                ? $path
-                : url('api/media/'.ltrim($path, '/')))
+        $urls = collect($this->images ?? [])
+            ->map(fn ($path) => url('api/media/'.ltrim($path, '/')))
             ->values()
             ->all();
+
+        if (! $urls && $this->image_url) {
+            $urls = [$this->image_url];
+        }
+
+        return $urls;
     }
 
     public function productImages(): HasMany
@@ -80,17 +91,14 @@ class Product extends Model
         return $this->belongsTo(Category::class);
     }
 
-    /**
-     * Shape expected by the Flutter Product model.
-     *
-     * @return array{id: string, name: string, description: string, images: list<string>, price: float, originalPrice: ?float, unit: string, categoryId: string, stockQuantity: int, isFavorite: bool}
-     */
+    /** Shape expected by the Flutter Product model. */
     public function toApi(bool $isFavorite = false): array
     {
         return [
             'id' => (string) $this->id,
             'name' => $this->name,
             'description' => $this->description,
+            'imageUrl' => $this->imageUrls()[0] ?? '',
             'images' => $this->imageUrls(),
             'price' => $this->price,
             'originalPrice' => $this->original_price,

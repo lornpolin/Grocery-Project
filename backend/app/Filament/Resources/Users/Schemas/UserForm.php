@@ -2,7 +2,6 @@
 
 namespace App\Filament\Resources\Users\Schemas;
 
-use Filament\Forms\Components\FileUpload;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
 use Filament\Schemas\Schema;
@@ -14,15 +13,6 @@ class UserForm
         return $schema
             ->columns(2)
             ->components([
-                FileUpload::make('avatar')
-                    ->label('Profile photo')
-                    ->avatar()
-                    ->image()
-                    ->maxSize(5120)
-                    ->disk('public')
-                    ->directory('avatars')
-                    ->visibility('public')
-                    ->columnSpanFull(),
                 TextInput::make('name')
                     ->required()
                     ->maxLength(255),
@@ -30,9 +20,6 @@ class UserForm
                     ->email()
                     ->required()
                     ->unique(ignoreRecord: true),
-                TextInput::make('phone')
-                    ->tel()
-                    ->maxLength(50),
                 TextInput::make('password')
                     ->password()
                     ->revealable()
